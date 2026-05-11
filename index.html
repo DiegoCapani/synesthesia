@@ -64,20 +64,17 @@
     const ui = document.getElementById('ui');
 
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
-    const filter = new Tone.Filter(1200, "lowpass").connect(reverb);
+    const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 4 } // Release lungo per fluidità
+        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 4 }
     }).connect(filter);
 
-    synth.volume.value = 6;
+    synth.volume.value = 8;
 
     const notes = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "C5"];
     
-    // Variabili di controllo movimento e stabilità
-    let lastBrightness = 0;
-    let minObs = 255;
-    let maxObs = 0;
+    let prevFrame = null;
     let lastNote = "";
     let isPlaying = false;
 
@@ -99,70 +96,54 @@
         canvas.height = 64;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        const frame = ctx.getImageData(16, 16, 32, 32);
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < frame.data.length; i += 4) {
-            r += frame.data[i]; g += frame.data[i + 1]; b += frame.data[i + 2];
+        const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let motionTotal = 0;
+        let brightnessSum = 0;
+
+        if (prevFrame) {
+            for (let i = 0; i < currentFrame.data.length; i += 4) {
+                // Calcola la differenza di movimento (pixel per pixel)
+                const diff = Math.abs(currentFrame.data[i] - prevFrame.data[i]);
+                if (diff > 20) motionTotal += diff; // Soglia per ignorare il rumore digitale
+                
+                brightnessSum += currentFrame.data[i];
+            }
         }
-        const count = frame.data.length / 4;
-        r /= count; g /= count; b /= count;
         
-        let currentBright = (r + g + b) / 3;
+        prevFrame = currentFrame;
 
-        // 1. RILEVAMENTO MOVIMENTO (Delta)
-        // Se la differenza tra i frame è minima, consideriamo "nessun movimento"
-        let motionDelta = Math.abs(currentBright - lastBrightness);
+        const avgBrightness = brightnessSum / (canvas.width * canvas.height);
         
-        // Soglia di silenzio (regola questo valore se è troppo sensibile)
-        const silenceThreshold = 0.4; 
-
-        if (motionDelta > silenceThreshold) {
-            // C'è movimento: aggiorna i limiti di luce
-            if (currentBright < minObs) minObs = currentBright;
-            if (currentBright > maxObs) maxObs = currentBright;
-            
-            let range = maxObs - minObs;
-            if (range < 20) range = 20;
-
-            let norm = (currentBright - minObs) / range;
-            norm = Math.max(0, Math.min(1, norm));
-
-            updateSound(norm, r, true);
+        // SOGLIA MOVIMENTO: Se il movimento totale è superiore a 5000 (valore empirico molto sensibile)
+        if (motionTotal > 5000) {
+            // Mappa la luminosità sulla nota
+            const norm = Math.min(1, avgBrightness / 150); 
+            updateSound(norm, true);
             isPlaying = true;
         } else {
-            // Nessun movimento: silenzia gradualmente
+            // Se non c'è abbastanza movimento, rilascia le note
             if (isPlaying) {
                 synth.releaseAll();
                 isPlaying = false;
-                lastNote = ""; // Resetta per permettere il riattacco
+                lastNote = "";
             }
         }
-
-        lastBrightness = currentBright;
-        
-        // Auto-riequilibrio dei sensori
-        minObs += 0.05;
-        maxObs -= 0.05;
 
         requestAnimationFrame(analyze);
     }
 
-    function updateSound(norm, r, shouldPlay) {
+    function updateSound(norm, shouldPlay) {
         const noteIndex = Math.floor(norm * (notes.length - 1));
         const currentNote = notes[noteIndex];
 
-        filter.frequency.rampTo(mapRange(r, 0, 150, 400, 2500), 0.4);
-
-        // Cambia nota solo se è diversa dalla precedente per evitare "vibrazioni"
         if (currentNote !== lastNote && shouldPlay) {
             synth.releaseAll();
             synth.triggerAttack(currentNote, "+0.05", 0.5);
             lastNote = currentNote;
+            
+            // Apriamo il filtro dinamicamente con il movimento
+            filter.frequency.rampTo(600 + (norm * 2000), 0.3);
         }
-    }
-
-    function mapRange(value, inMin, inMax, outMin, outMax) {
-        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
     }
 </script>
 </body>
