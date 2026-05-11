@@ -6,13 +6,11 @@
     <title>Eco-Sinestesia | Stazione 01</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: 'Lexend', sans-serif; overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        #video { display: none; }
-        #canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
-        #ui { z-index: 10; text-align: center; background: rgba(0,0,0,0.7); padding: 40px; border: 0.5px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); }
-        .label { margin-bottom: 10px; font-size: 0.8em; letter-spacing: 6px; text-transform: uppercase; opacity: 0.8; }
-        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 35px; cursor: pointer; letter-spacing: 3px; font-size: 0.9em; transition: all 0.5s ease; }
-        button:hover { background: #fff; color: #000; box-shadow: 0 0 20px rgba(255,255,255,0.4); }
+        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; display: block; z-index: 1; }
+        #canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 2; mix-blend-mode: screen; pointer-events: none; }
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 0.8s; }
+        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 20px 40px; font-size: 1rem; cursor: pointer; letter-spacing: 4px; text-transform: uppercase; }
     </style>
 </head>
 <body>
@@ -21,112 +19,108 @@
     <canvas id="canvas"></canvas>
 
     <div id="ui">
-        <div class="label">Eco-Sinestesia</div>
-        <h2 style="font-weight: 200; margin-bottom: 30px; letter-spacing: 2px;">Scomposizione dell'Io</h2>
-        <button id="startBtn">INIZIA L'ESPERIENZA</button>
+        <div style="letter-spacing: 8px; margin-bottom: 20px; opacity: 0.5;">STAZIONE 01</div>
+        <h1 style="font-weight: 100; margin-bottom: 40px;">ECO-SINESTESIA</h1>
+        <button id="startBtn">ATTIVA SINESTESIA</button>
     </div>
 
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- AUDIO DESIGN NEW AGE ---
-    const reverb = new Tone.Reverb({ decay: 10, wet: 0.6 }).toDestination();
-    const delay = new Tone.FeedbackDelay("8n", 0.5).connect(reverb);
-    const filter = new Tone.Filter(1200, "lowpass").connect(delay);
+    // --- SOUND DESIGN ARMONICO NEW AGE ---
+    const reverb = new Tone.Freeverb({ roomSize: 0.9, dampening: 3000, wet: 0.5 }).toDestination();
+    const chorus = new Tone.Chorus(2, 2.5, 0.5).connect(reverb).start();
+    const filter = new Tone.Filter(800, "lowpass").connect(chorus);
     
-    // Un sintetizzatore morbido e cristallino
     const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "fatsine", count: 3, spread: 30 },
-        envelope: { attack: 2, decay: 2, sustain: 0.9, release: 5 }
+        oscillator: { type: "sine" },
+        envelope: { attack: 3, decay: 2, sustain: 1, release: 5 }
     }).connect(filter);
     
-    synth.volume.value = -5;
+    synth.volume.value = -10;
+    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "E5"]; // Scala Pentatonica Celeste
 
-    // Scala Pentatonica di Do Maggiore (Sempre Armonica)
-    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
+    async function start() {
+        try {
+            await Tone.start();
+            console.log("Audio attivo");
 
-    async function setup() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-        video.srcObject = stream;
-        return new Promise(r => video.onloadedmetadata = r);
+            const constraints = {
+                video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+                audio: false
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            
+            // Aspettiamo che il video sia effettivamente pronto per essere visualizzato
+            video.onloadedmetadata = () => {
+                video.play();
+                ui.style.opacity = '0';
+                setTimeout(() => ui.style.display = 'none', 800);
+                requestAnimationFrame(update);
+            };
+
+        } catch (err) {
+            console.error("Errore:", err);
+            alert("Per favore, abilita la fotocamera.");
+        }
     }
 
-    document.getElementById('startBtn').addEventListener('click', async () => {
-        await Tone.start();
-        await setup();
-        ui.style.opacity = '0';
-        setTimeout(() => ui.style.display = 'none', 500);
-        loop();
-    });
+    function update() {
+        if (video.paused || video.ended) return;
 
-    let lastNote = "";
-
-    function loop() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // --- EFFETTO VISIVO: SCOMPOSIZIONE CROMATICA ---
-        ctx.save();
-        
-        // Calcoliamo un offset basato sul tempo per un movimento fluido
-        const time = Date.now() * 0.002;
-        const shift = Math.sin(time) * 15;
+        // Disegniamo l'effetto visivo (RGB SHIFT)
+        const shift = Math.sin(Date.now() * 0.001) * 20;
 
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.globalCompositeOperation = "screen";
 
-        // Canale Rosso (Spostato)
+        // Canale Rosso
         ctx.filter = "matrix(1,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,1,0)";
         ctx.drawImage(video, shift, 0, canvas.width, canvas.height);
 
-        // Canale Blu (Spostato opposto)
+        // Canale Blu
         ctx.filter = "matrix(0,0,0,0,0, 0,0,0,0,0, 0,0,1,0,0, 0,0,0,1,0)";
         ctx.drawImage(video, -shift, 0, canvas.width, canvas.height);
 
-        // Canale Verde (Stabile al centro)
-        ctx.filter = "matrix(0,0,0,0,0, 0,1,0,0,0, 0,0,0,0,0, 0,0,0,1,0)";
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        ctx.restore();
-
         // --- ANALISI PER IL SUONO ---
-        // Analizziamo il centro per estrarre il "cuore" del colore
-        const dataCanvas = document.createElement('canvas');
-        dataCanvas.width = 40; dataCanvas.height = 40;
-        const dCtx = dataCanvas.getContext('2d');
-        dCtx.drawImage(video, 10, 10, 20, 20);
-        const pixels = dCtx.getImageData(0, 0, 20, 20).data;
-
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < pixels.length; i += 4) {
-            r += pixels[i]; g += pixels[i+1]; b += pixels[i+2];
-        }
-        const avg = pixels.length / 4;
-        r /= avg; g /= avg; b /= avg;
-
-        updateNewAgeSound(r, g, b);
+        // Campioniamo una piccola area per stabilità
+        const offscreen = document.createElement('canvas');
+        offscreen.width = 10; offscreen.height = 10;
+        const oCtx = offscreen.getContext('2d');
+        oCtx.drawImage(video, 0, 0, 10, 10);
+        const p = oCtx.getImageData(5, 5, 1, 1).data;
         
-        requestAnimationFrame(loop);
+        processAudio(p[0], p[1], p[2]);
+
+        requestAnimationFrame(update);
     }
 
-    function updateNewAgeSound(r, g, b) {
+    let lastNote = "";
+    function processAudio(r, g, b) {
         const brightness = (r + g + b) / 3;
-        
-        // Selezione nota armonica
-        const nIdx = Math.floor((brightness / 256) * notes.length);
-        const currentNote = notes[nIdx];
+        const nIdx = Math.floor(Tone.Math.mapLinear(brightness, 0, 255, 0, notes.length - 1));
+        const note = notes[nIdx];
 
-        // Il filtro diventa più "etereo" con la luce
-        filter.frequency.rampTo(r * 5 + 400, 0.5);
+        // Filtro New Age: più luce = suono più aperto
+        filter.frequency.rampTo(Tone.Math.mapLinear(r, 0, 255, 300, 2000), 0.5);
 
-        if (currentNote !== lastNote && brightness > 40) {
-            // Suono vellutato con attacco lento
-            synth.triggerAttackRelease(currentNote, "2n", undefined, g/512 + 0.1);
-            lastNote = currentNote;
+        if (note !== lastNote && brightness > 30) {
+            synth.releaseAll();
+            // Trigger armonico morbido
+            synth.triggerAttack(note, "+0.1", 0.4);
+            lastNote = note;
         }
     }
+
+    document.getElementById('startBtn').addEventListener('click', start);
 </script>
 </body>
 </html>
