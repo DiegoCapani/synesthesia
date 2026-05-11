@@ -18,7 +18,7 @@
             height: 100vh; 
         }
 
-        /* Il video è attivo ma non renderizzato direttamente per usare il canvas */
+        /* Video nascosto, usiamo il canvas per il feedback visivo */
         #video { 
             position: absolute;
             width: 1px;
@@ -73,24 +73,22 @@
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // Setup Audio (Parametri Originali)
+    // Configurazione Audio (Parametri Originali)
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
         envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
+    
     synth.volume.value = 0; 
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
     let lastNote = "";
-    
-    // Variabile per controllare la forza dell'eco visivo (risonanza)
-    let resonanceAmount = 0.15; 
 
     async function setupCamera() {
         try {
@@ -106,7 +104,7 @@
                 };
             });
         } catch (err) {
-            console.error("Accesso camera negato o non disponibile.");
+            console.error("Errore accesso camera.");
         }
     }
 
@@ -126,30 +124,27 @@
     function render() {
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
             
-            // --- EFFETTO RISONANZA (ECO VISIVO) ---
-            // Disegniamo un rettangolo nero semitrasparente. 
-            // Più è basso il valore di alpha, più lunga sarà la scia dell'eco.
+            // --- EFFETTO ECO VISIVO (RISUONANZA) ---
+            // Invece di pulire lo schermo, disegniamo un velo nero trasparente.
+            // Questo crea la scia di movimento (effetto ghost).
             ctx.globalCompositeOperation = 'source-over';
-            ctx.fillStyle = `rgba(0, 0, 0, ${resonanceAmount})`;
+            ctx.fillStyle = "rgba(0, 0, 0, 0.15)"; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Disegniamo il frame attuale con una certa opacità per fondersi con l'eco
-            ctx.globalAlpha = 0.8;
+            // Disegniamo il nuovo frame della camera con una leggera trasparenza
+            ctx.globalAlpha = 0.4; // Regola questo per un eco più o meno marcato
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             ctx.globalAlpha = 1.0;
 
-            // Analisi per il suono
+            // Analisi dei cromatismi per il suono
             analyze();
-
-            // Ritorno graduale alla risonanza base se è stata alterata
-            if (resonanceAmount < 0.15) resonanceAmount += 0.005;
         }
         requestAnimationFrame(render);
     }
 
     function analyze() {
-        // Analisi di una piccola area centrale
-        const frame = ctx.getImageData(canvas.width/2 - 5, canvas.height/2 - 5, 10, 10);
+        // Analisi dell'area centrale del canvas (che contiene già l'immagine elaborata)
+        const frame = ctx.getImageData(canvas.width/2 - 10, canvas.height/2 - 10, 20, 20);
         let r = 0, g = 0, b = 0;
         for (let i = 0; i < frame.data.length; i += 4) {
             r += frame.data[i];
@@ -165,15 +160,14 @@
         const noteIndex = Math.floor((brightness / 256) * notes.length);
         const currentNote = notes[noteIndex];
 
+        // Il rosso controlla l'apertura del filtro (risonanza sonora)
         filter.frequency.rampTo(400 + (r * 6), 0.5);
 
         if (currentNote !== lastNote && currentNote !== undefined) {
             synth.releaseAll();
-            synth.triggerAttack(currentNote, "+0.1", 0.4);
-            
-            // Quando la nota cambia, aumentiamo temporaneamente la risonanza visiva (scia più lunga)
-            resonanceAmount = 0.05; 
-            
+            // Il verde controlla la forza dell'attacco
+            const velocity = 0.1 + (g / 512);
+            synth.triggerAttack(currentNote, "+0.1", velocity);
             lastNote = currentNote;
         }
     }
