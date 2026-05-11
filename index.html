@@ -64,15 +64,22 @@
     const ui = document.getElementById('ui');
 
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
-    const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
+    const filter = new Tone.Filter(1200, "lowpass").connect(reverb);
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 0.8, decay: 1, sustain: 0.8, release: 3 }
+        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 4 } // Release lungo per fluidità
     }).connect(filter);
 
-    synth.volume.value = 8; // Volume alzato ulteriormente
+    synth.volume.value = 6;
 
-    const notes = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "C5", "E5"];
+    const notes = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "C5"];
+    
+    // Variabili di controllo movimento e stabilità
+    let lastBrightness = 0;
+    let minObs = 255;
+    let maxObs = 0;
+    let lastNote = "";
+    let isPlaying = false;
 
     async function setupCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
@@ -87,10 +94,6 @@
         analyze();
     });
 
-    // Variabili per la normalizzazione dinamica
-    let minObserved = 255;
-    let maxObserved = 0;
-
     function analyze() {
         canvas.width = 64; 
         canvas.height = 64;
@@ -98,55 +101,62 @@
         
         const frame = ctx.getImageData(16, 16, 32, 32);
         let r = 0, g = 0, b = 0;
-
         for (let i = 0; i < frame.data.length; i += 4) {
-            r += frame.data[i];
-            g += frame.data[i + 1];
-            b += frame.data[i + 2];
+            r += frame.data[i]; g += frame.data[i + 1]; b += frame.data[i + 2];
         }
-
         const count = frame.data.length / 4;
         r /= count; g /= count; b /= count;
         
-        let currentBrightness = (r + g + b) / 3;
+        let currentBright = (r + g + b) / 3;
 
-        // --- SISTEMA DI AUTOCALIBRAZIONE ---
-        // Inseguiamo il minimo e il massimo valore di luce visti finora
-        // (con un lento ritorno per adattarsi ai cambi di luce)
-        if (currentBrightness < minObserved) minObserved = currentBrightness;
-        if (currentBrightness > maxObserved) maxObserved = currentBrightness;
+        // 1. RILEVAMENTO MOVIMENTO (Delta)
+        // Se la differenza tra i frame è minima, consideriamo "nessun movimento"
+        let motionDelta = Math.abs(currentBright - lastBrightness);
         
-        // Escursione minima per evitare rumore di fondo
-        let range = maxObserved - minObserved;
-        if (range < 20) range = 20; 
+        // Soglia di silenzio (regola questo valore se è troppo sensibile)
+        const silenceThreshold = 0.4; 
 
-        // Normalizziamo il valore: dove si colloca il pixel corrente tra il buio e la luce della stanza?
-        let normalizedOutput = (currentBrightness - minObserved) / range;
-        normalizedOutput = Math.max(0, Math.min(1, normalizedOutput));
+        if (motionDelta > silenceThreshold) {
+            // C'è movimento: aggiorna i limiti di luce
+            if (currentBright < minObs) minObs = currentBright;
+            if (currentBright > maxObs) maxObs = currentBright;
+            
+            let range = maxObs - minObs;
+            if (range < 20) range = 20;
 
-        updateSound(normalizedOutput, r, g);
+            let norm = (currentBright - minObs) / range;
+            norm = Math.max(0, Math.min(1, norm));
 
-        // Lenta deriva per non rimanere bloccati su picchi di luce passati
-        minObserved += 0.1;
-        maxObserved -= 0.1;
+            updateSound(norm, r, true);
+            isPlaying = true;
+        } else {
+            // Nessun movimento: silenzia gradualmente
+            if (isPlaying) {
+                synth.releaseAll();
+                isPlaying = false;
+                lastNote = ""; // Resetta per permettere il riattacco
+            }
+        }
+
+        lastBrightness = currentBright;
+        
+        // Auto-riequilibrio dei sensori
+        minObs += 0.05;
+        maxObs -= 0.05;
 
         requestAnimationFrame(analyze);
     }
 
-    let lastNote = "";
-
-    function updateSound(norm, r, g) {
-        // Usa il valore normalizzato (0-1) per scegliere la nota
+    function updateSound(norm, r, shouldPlay) {
         const noteIndex = Math.floor(norm * (notes.length - 1));
         const currentNote = notes[noteIndex];
 
-        // Il filtro rimane sensibile al colore assoluto (calore della pelle/rosso)
-        filter.frequency.rampTo(mapRange(r, 0, 150, 400, 3000), 0.3);
+        filter.frequency.rampTo(mapRange(r, 0, 150, 400, 2500), 0.4);
 
-        if (currentNote !== lastNote) {
+        // Cambia nota solo se è diversa dalla precedente per evitare "vibrazioni"
+        if (currentNote !== lastNote && shouldPlay) {
             synth.releaseAll();
-            // Suona sempre con una buona intensità
-            synth.triggerAttack(currentNote, "+0.1", 0.5);
+            synth.triggerAttack(currentNote, "+0.05", 0.5);
             lastNote = currentNote;
         }
     }
