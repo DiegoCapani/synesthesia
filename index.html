@@ -36,66 +36,34 @@
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- ENGINE MUSICALE NEW AGE ---
-    const reverb = new Tone.Reverb({ decay: 10, wet: 0.6 }).toDestination();
-    const delay = new Tone.FeedbackDelay("4n", 0.4).connect(reverb);
-    
-    // Sintetizzatore Melodico (Gocce di cristallo)
+    // --- ENGINE AUDIO REATTIVO ---
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).toDestination();
+    const filter = new Tone.Filter(1200, "lowpass").connect(reverb);
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 0.5, decay: 0.2, sustain: 0.4, release: 2 }
-    }).connect(delay);
+        envelope: { attack: 0.1, decay: 0.1, sustain: 1, release: 2 }
+    }).connect(filter);
 
-    // Sintetizzatore Drone (Tappeto armonico profondo)
-    const drone = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "fatsawtooth", count: 3, spread: 30 },
-        envelope: { attack: 4, release: 4 }
-    }).connect(reverb);
+    // Volume master gestito dinamicamente
+    const volumeBus = new Tone.Volume(-10).toDestination();
+    synth.connect(volumeBus);
 
-    synth.volume.value = -10;
-    drone.volume.value = -25;
-
-    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"]; // Pentatonica Maggiore
-    let currentBright = 0;
-    let currentR = 127;
+    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "G5"];
+    let lastNote = "";
+    let prevFrameData = null;
 
     async function start() {
         try {
             await Tone.start();
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
-            
             video.onloadedmetadata = () => {
                 video.play();
                 ui.style.opacity = '0';
                 setTimeout(() => ui.style.display = 'none', 1000);
-                
-                // Avvia la struttura ritmica musicale
-                Tone.Transport.bpm.value = 60; // Tempo calmo
-                Tone.Transport.scheduleRepeat(sequence, "8n");
-                Tone.Transport.start();
-
-                // Accende il tappeto armonico fisso
-                drone.triggerAttack(["C3", "G3"]);
-                
                 render();
             };
         } catch (e) { alert("Accesso camera negato."); }
-    }
-
-    // Funzione che compone la melodia a tempo
-    function sequence(time) {
-        if (currentBright > 40) {
-            // Sceglie la nota in base alla luminosità attuale
-            const nIdx = Math.floor((currentBright / 256) * notes.length);
-            const note = notes[nIdx % notes.length];
-            
-            // Probabilità di suonare: crea un ritmo meno meccanico
-            if (Math.random() > 0.4) {
-                const velocity = (currentBright / 255) * 0.5 + 0.1;
-                synth.triggerAttackRelease(note, "4n", time, velocity);
-            }
-        }
     }
 
     function render() {
@@ -107,33 +75,70 @@
         tCanvas.width = 40; tCanvas.height = 40;
         const tCtx = tCanvas.getContext('2d');
         tCtx.drawImage(video, 0, 0, 40, 40);
-        const data = tCtx.getImageData(0, 0, 40, 40).data;
+        const frame = tCtx.getImageData(0, 0, 40, 40);
+        const data = frame.data;
 
-        let rSum = 0, gSum = 0, bSum = 0;
+        let totalR = 0, totalG = 0, totalB = 0;
+        let motionAmount = 0;
 
+        // Calcolo del movimento (differenza tra frame)
+        if (prevFrameData) {
+            for (let i = 0; i < data.length; i += 4) {
+                motionAmount += Math.abs(data[i] - prevFrameData[i]);
+            }
+        }
+        prevFrameData = new Uint8ClampedArray(data);
+
+        // Disegno particelle e calcolo medie
         for (let y = 0; y < 40; y += 2) {
             for (let x = 0; x < 40; x += 2) {
                 const i = (y * 40 + x) * 4;
                 const r = data[i], g = data[i+1], b = data[i+2];
                 const bright = (r + g + b) / 3;
 
-                if (bright > 150) {
-                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.5)`;
+                if (bright > 160) {
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.6)`;
                     const px = (x / 40) * canvas.width;
                     const py = (y / 40) * canvas.height;
                     ctx.beginPath();
-                    ctx.arc(px, py, bright/40, 0, Math.PI * 2);
+                    ctx.arc(px, py, bright/45, 0, Math.PI * 2);
                     ctx.fill();
                 }
-                rSum += r; gSum += g; bSum += b;
+                totalR += r; totalG += g; totalB += b;
             }
         }
 
         const count = (40*40)/4;
-        currentBright = (rSum + gSum + bSum) / (count * 3);
-        currentR = rSum / count;
-
+        updateAudio(totalR/count, totalG/count, totalB/count, motionAmount);
+        
         requestAnimationFrame(render);
+    }
+
+    function updateAudio(r, g, b, motion) {
+        const brightness = (r + g + b) / 3;
+        
+        // SOGLIA DI SILENZIO: Se il movimento è minimo, sfumiamo a zero
+        const motionThreshold = 15000; // Regolabile in base alla sensibilità desiderata
+        if (motion < motionThreshold) {
+            volumeBus.volume.rampTo(-Infinity, 0.5); // Silenzio graduale
+            return; 
+        } else {
+            volumeBus.volume.rampTo(-6, 0.1); // Riattivazione immediata
+        }
+
+        const nIdx = Math.floor((brightness / 256) * notes.length);
+        const note = notes[nIdx];
+
+        // Filtro ultra-reattivo basato sulla componente Rossa
+        filter.frequency.setTargetAtTime(r * 5 + 300, Tone.now(), 0.1);
+
+        if (note !== lastNote && brightness > 40) {
+            synth.releaseAll();
+            // L'intensità (velocity) dipende dal movimento rilevato
+            const vel = Math.min(motion / 100000, 0.8); 
+            synth.triggerAttack(note, Tone.now(), vel);
+            lastNote = note;
+        }
     }
 
     document.getElementById('startBtn').addEventListener('click', start);
