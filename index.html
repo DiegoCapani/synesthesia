@@ -81,7 +81,7 @@ button {
 <div id="ui">
     <div class="container">
         <div style="letter-spacing:4px;font-size:0.7em;opacity:0.6;">
-            INSTALLAZIONE MUSEALE 2026
+            INSTALLAZIONE MUSEALE
         </div>
         <h1 style="font-weight:100;letter-spacing:5px;">
             ECO-SINESTESIA
@@ -101,40 +101,41 @@ const ui = document.getElementById("ui");
 let prevData = null;
 
 // =========================
-// AUDIO INSTALLAZIONE
+// AUDIO MUSEALE STABILE
 // =========================
 
-const limiter = new Tone.Limiter(-0.3).toDestination();
+const limiter = new Tone.Limiter(-0.2).toDestination();
 
 const reverb = new Tone.Reverb({
-    decay: 22,
-    wet: 0.92
+    decay: 20,
+    wet: 0.9
 }).connect(limiter);
 
 const delay = new Tone.FeedbackDelay({
     delayTime: "8n",
-    feedback: 0.4,
-    wet: 0.3
+    feedback: 0.35,
+    wet: 0.25
 }).connect(reverb);
 
 const chorus = new Tone.Chorus({
     frequency: 0.15,
-    delayTime: 10,
+    delayTime: 9,
     depth: 0.8,
     wet: 0.5
 }).connect(delay);
+
 chorus.start();
 
-// 🔊 volume più alto (installazione fisica)
-const masterGain = new Tone.Volume(2).connect(chorus);
+// 🔊 volume più alto ma controllato (installazione reale)
+const masterGain = new Tone.Volume(3).connect(chorus);
 
-// corpo sonoro principale
+// synth principale continuo
 const synth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 10,
+    maxPolyphony: 8,
     options: {
         oscillator: { type: "sine" },
         envelope: {
-            attack: 1.8,
+            attack: 2,
             decay: 0.6,
             sustain: 1,
             release: 10
@@ -144,11 +145,11 @@ const synth = new Tone.PolySynth(Tone.Synth, {
 
 // layer etereo
 const shimmer = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 8,
+    maxPolyphony: 6,
     options: {
         oscillator: { type: "triangle" },
         envelope: {
-            attack: 1.5,
+            attack: 1.8,
             decay: 0.8,
             sustain: 0.7,
             release: 8
@@ -156,12 +157,14 @@ const shimmer = new Tone.PolySynth(Tone.Synth, {
     }
 }).connect(masterGain);
 
-// scala armonica
+// scala musicale
 const scale = [
 "C3","D3","E3","G3","A3",
 "C4","D4","E4","G4","A4",
 "C5","D5"
 ];
+
+let lastEnergy = 0;
 
 async function initAudio() {
     await Tone.start();
@@ -199,7 +202,7 @@ function resize(){
 window.addEventListener("resize", resize);
 
 // =========================
-// INSTALLAZIONE SONORA
+// LOOP INSTALLAZIONE
 // =========================
 
 function loop(){
@@ -252,43 +255,30 @@ function loop(){
 
     const now = Tone.now();
 
-    // energia del corpo nello spazio
     const energy = Math.min(totalMove/4000,1);
 
-    let centerX = canvas.width/2;
-    let noteIndex = 0;
-    let note = "C4";
+    const smoothEnergy = lastEnergy*0.85 + energy*0.15;
+    lastEnergy = smoothEnergy;
 
     if(activeCount>0){
 
-        centerX = activeX/activeCount;
+        const centerX = activeX/activeCount;
 
-        noteIndex = Math.floor((centerX/grid)*scale.length);
-        note = scale[Math.max(0,Math.min(noteIndex,scale.length-1))];
+        const noteIndex = Math.floor((centerX/grid)*scale.length);
+        const note = scale[Math.max(0,Math.min(noteIndex,scale.length-1))];
 
-        // volume globale installazione
-        const volume = -1 + energy*5;
+        const volume = -2 + smoothEnergy*6;
 
         synth.volume.value = volume;
         shimmer.volume.value = volume - 4;
 
-        // suono continuo del corpo (non a impulsi)
-        synth.triggerAttack(note, now);
-
-        const harmony = scale[Math.min(scale.length-1,noteIndex+2)];
-        shimmer.triggerAttack(harmony, now);
+        // 🔥 SUONO CONTINUO (non a scatti)
+        synth.triggerAttack(note);
+        shimmer.triggerAttack(scale[Math.min(scale.length-1,noteIndex+2)]);
 
     } else {
         synth.releaseAll();
         shimmer.releaseAll();
-    }
-
-    // visual centro energia
-    if(activeCount>0){
-        ctx.strokeStyle="white";
-        ctx.beginPath();
-        ctx.arc(canvas.width/2,canvas.height/2,20,0,Math.PI*2);
-        ctx.stroke();
     }
 
     requestAnimationFrame(loop);
