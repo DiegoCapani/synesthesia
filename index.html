@@ -2,17 +2,18 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Eco-Sinestesia Stabilizzata</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Eco-Sinestesia | Stazione 01 v13</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 
 <style>
 body {
     margin: 0;
-    background: black;
-    overflow: hidden;
-    color: white;
+    background: #000;
+    color: #fff;
     font-family: sans-serif;
+    overflow: hidden;
+    height: 100vh;
 }
 
 #video {
@@ -20,13 +21,17 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    opacity: 0.55;
+    z-index: 1;
+    opacity: 0.5;
 }
 
 #canvas {
     position: absolute;
     width: 100%;
     height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    mix-blend-mode: screen;
 }
 
 #ui {
@@ -36,13 +41,34 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: black;
-    z-index: 10;
+    background: #000;
+    z-index: 100;
+    transition: opacity 1s;
+}
+
+.container {
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 50px;
+    background: rgba(0,0,0,0.9);
 }
 
 button {
-    padding: 20px 40px;
+    background: #fff;
+    color: #000;
+    border: none;
+    padding: 20px 50px;
+    cursor: pointer;
+    letter-spacing: 3px;
     font-weight: bold;
+    text-transform: uppercase;
+}
+
+.version-tag {
+    margin-top: 25px;
+    font-size: 0.7em;
+    opacity: 0.5;
+    letter-spacing: 4px;
 }
 </style>
 </head>
@@ -53,78 +79,104 @@ button {
 <canvas id="canvas"></canvas>
 
 <div id="ui">
-    <button id="startBtn">ATTIVA INSTALLAZIONE</button>
+    <div class="container">
+        <div style="letter-spacing:4px;font-size:0.7em;opacity:0.6;">CITTÀ VISIBILE 2026</div>
+        <h1 style="font-weight:100;letter-spacing:5px;">ECO-SINESTESIA</h1>
+        <button id="startBtn">ATTIVA AUDIO E VIDEO</button>
+        <div class="version-tag">STAZIONE 01 | v13</div>
+    </div>
 </div>
 
 <script>
 
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const ui = document.getElementById("ui");
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const ui = document.getElementById('ui');
 
 let prevData = null;
+let lastNote = "";
+let lastTriggerTime = 0;
 
 // =========================
-// AUDIO STABILE (NO COLLASSO)
+// VELOCITÀ CORPO
+// =========================
+let prevCenterX = null;
+let prevCenterY = null;
+let prevTime = null;
+
+// =========================
+// AUDIO NEW AGE
 // =========================
 
-const limiter = new Tone.Limiter(-1).toDestination();
+const limiter = new Tone.Limiter(-0.5).toDestination();
 
 const reverb = new Tone.Reverb({
     decay: 18,
     wet: 0.85
 }).connect(limiter);
 
+const delay = new Tone.FeedbackDelay({
+    delayTime: "4n",
+    feedback: 0.35,
+    wet: 0.25
+}).connect(reverb);
+
+const chorus = new Tone.Chorus({
+    frequency: 0.2,
+    delayTime: 8,
+    depth: 0.7,
+    wet: 0.45
+}).connect(delay);
+chorus.start();
+
+const masterGain = new Tone.Volume(-2).connect(chorus);
+
+// synth principale
 const synth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 6,
+    maxPolyphony: 8,
     options: {
         oscillator: { type: "sine" },
         envelope: {
             attack: 1.5,
-            decay: 0.5,
-            sustain: 1,
-            release: 6
+            decay: 0.8,
+            sustain: 0.9,
+            release: 8
         }
     }
-}).connect(reverb);
+}).connect(masterGain);
 
+// armonico
 const shimmer = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 4,
+    maxPolyphony: 6,
     options: {
         oscillator: { type: "triangle" },
         envelope: {
             attack: 1.2,
             decay: 0.5,
-            sustain: 0.8,
-            release: 5
+            sustain: 0.6,
+            release: 6
         }
     }
-}).connect(reverb);
+}).connect(masterGain);
 
+// scala
 const scale = [
 "C3","D3","E3","G3","A3",
 "C4","D4","E4","G4","A4",
-"C5"
+"C5","D5"
 ];
 
-// 🎯 stato stabile (CHIAVE DEL FIX)
-let currentNote = null;
-let currentHarmony = null;
-
-let lastChangeTime = 0;
-let lastEnergy = 0;
-
-async function startAudio() {
+async function initAudio() {
     await Tone.start();
+    await Tone.loaded();
 
-    synth.triggerAttackRelease("C4","2n",undefined,0.4);
-    shimmer.triggerAttackRelease("G4","2n",undefined,0.2);
+    synth.triggerAttackRelease("C4","2n",undefined,0.6);
+    shimmer.triggerAttackRelease("G4","1n",undefined,0.3);
 }
 
 async function start() {
-
-    await startAudio();
+    await initAudio();
 
     const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" }
@@ -135,25 +187,26 @@ async function start() {
     video.onloadedmetadata = async () => {
         await video.play();
 
-        ui.style.display = "none";
-        resize();
-        loop();
+        ui.style.opacity = 0;
+        setTimeout(()=>ui.style.display="none",1000);
+
+        resizeCanvas();
+        render();
     };
 }
 
-function resize(){
+function resizeCanvas(){
     canvas.width = innerWidth;
     canvas.height = innerHeight;
 }
 
-window.addEventListener("resize", resize);
+window.addEventListener("resize", resizeCanvas);
 
 // =========================
-// LOOP STABILE
+// LOOP VISIVO + SUONO
 // =========================
 
-function loop(){
-
+function render(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
     const grid = 30;
@@ -173,7 +226,7 @@ function loop(){
     for(let y=0;y<grid;y++){
         for(let x=0;x<grid;x++){
 
-            const i=(y*grid+x)*4;
+            const i = (y*grid+x)*4;
             const r=data[i],g=data[i+1],b=data[i+2];
 
             const bright=(r+g+b)/3;
@@ -185,55 +238,78 @@ function loop(){
             if(bright>150){
                 activeX += x;
                 activeCount++;
+
+                ctx.fillStyle=`rgba(${r},${g},${b},0.25)`;
+                ctx.beginPath();
+                ctx.arc(
+                    (x/grid)*canvas.width,
+                    (y/grid)*canvas.height,
+                    bright/25,0,Math.PI*2
+                );
+                ctx.fill();
             }
         }
     }
 
     prevData = new Uint8ClampedArray(data);
 
-    const energy = Math.min(totalMove/3500,1);
-    const smooth = lastEnergy*0.85 + energy*0.15;
-    lastEnergy = smooth;
-
     const now = Tone.now();
+    const nowMs = performance.now();
+
+    let speed = 0;
+    let intensity = 0;
 
     if(activeCount>0){
 
         const centerX = activeX/activeCount;
+        const centerY = activeCount/(grid*grid)*grid;
 
-        const noteIndex = Math.floor((centerX/grid)*scale.length);
-        const note = scale[Math.max(0,Math.min(noteIndex,scale.length-1))];
+        if(prevCenterX!==null && prevTime!==null){
 
-        const harmony = scale[Math.min(scale.length-1,noteIndex+2)];
+            const dx=centerX-prevCenterX;
+            const dy=centerY-prevCenterY;
+            const dt=nowMs-prevTime;
 
-        // 🔥 CAMBIO SOLO SE CAMBIA MOVIMENTO / POSIZIONE
-        const shouldChange =
-            note !== currentNote ||
-            Math.abs(smooth - lastEnergy) > 0.2 ||
-            now - lastChangeTime > 1.2;
-
-        if(shouldChange){
-
-            // rilascia prima di cambiare (fondamentale)
-            synth.releaseAll();
-            shimmer.releaseAll();
-
-            synth.triggerAttack(note);
-            shimmer.triggerAttack(harmony);
-
-            currentNote = note;
-            currentHarmony = harmony;
-            lastChangeTime = now;
+            const dist=Math.sqrt(dx*dx+dy*dy);
+            speed=dist/(dt||1);
         }
 
-    } else {
-        synth.releaseAll();
-        shimmer.releaseAll();
-        currentNote = null;
-        currentHarmony = null;
+        intensity=Math.min(speed*8,1);
+
+        prevCenterX=centerX;
+        prevCenterY=centerY;
+        prevTime=nowMs;
+
+        const noteIndex=Math.floor((centerX/grid)*scale.length);
+        const note=scale[Math.max(0,Math.min(noteIndex,scale.length-1))];
+
+        if(totalMove>2500 && now-lastTriggerTime>0.4){
+
+            const gain=0.3+intensity*0.9;
+            const duration=intensity>0.6?"8n":"2n";
+
+            synth.triggerAttackRelease(note,duration,now,gain);
+
+            if(intensity>0.2){
+                const h=Math.min(scale.length-1,noteIndex+2);
+                shimmer.triggerAttackRelease(
+                    scale[h],
+                    intensity>0.6?"16n":"1n",
+                    now+0.03,
+                    gain*0.6
+                );
+            }
+
+            lastTriggerTime=now;
+        }
+
+        ctx.strokeStyle="white";
+        ctx.beginPath();
+        ctx.arc(canvas.width/2,canvas.height/2,20,0,Math.PI*2);
+        ctx.stroke();
     }
 
-    requestAnimationFrame(loop);
+    requestAnimationFrame(render);
 }
 
 document.getElementById("startBtn").addEventListener("click",start);
