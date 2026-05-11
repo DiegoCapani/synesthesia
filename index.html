@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Eco-Sinestesia | Stazione 01 v05</title>
+    <title>Eco-Sinestesia | Stazione 01 v06</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; height: 100vh; }
-        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.8; filter: saturate(0.4) brightness(1.1); }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.8; filter: brightness(1.1) contrast(1.1); }
         #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: screen; }
         
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
@@ -29,7 +29,7 @@
             <div style="letter-spacing: 4px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.5;">CITTÀ VISIBILE 2026</div>
             <h1>ECO-SINESTESIA</h1>
             <button id="startBtn">ATTIVA SCANSIONE</button>
-            <div class="version-tag">STAZIONE 01 | v05</div>
+            <div class="version-tag">STAZIONE 01 | v06</div>
         </div>
     </div>
 
@@ -39,11 +39,11 @@
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- ENGINE AUDIO v05 (Triangle Wave per udibilità) ---
-    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).toDestination();
+    // --- ENGINE AUDIO v06 (Sine Waves Meditative) ---
+    const reverb = new Tone.Reverb({ decay: 12, wet: 0.6 }).toDestination();
     const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "triangle" }, // Più udibile della sine ma dolce
-        envelope: { attack: 0.1, decay: 0.4, sustain: 0.8, release: 4 }
+        oscillator: { type: "sine" },
+        envelope: { attack: 1.5, decay: 1, sustain: 1, release: 5 }
     }).connect(reverb);
     
     const masterGain = new Tone.Volume(-10).toDestination();
@@ -54,13 +54,10 @@
     let lastNote = "";
 
     async function start() {
-        // Sblocco audio immediato
         await Tone.start();
-        console.log("Audio is ready");
-        
-        // Segnale acustico di avvio (Feedback per l'utente)
-        const welcomeSynth = new Tone.Synth().toDestination();
-        welcomeSynth.triggerAttackRelease("C5", "8n");
+        // Feedback di sblocco
+        const feedback = new Tone.Oscillator(440, "sine").connect(reverb).start();
+        feedback.stop("+0.1");
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -71,7 +68,7 @@
                 setTimeout(() => ui.style.display = 'none', 1000);
                 render();
             };
-        } catch (e) { alert("Attiva fotocamera per procedere."); }
+        } catch (e) { alert("Attiva fotocamera."); }
     }
 
     function render() {
@@ -79,49 +76,57 @@
         canvas.height = window.innerHeight;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        // Analisi Pixel su griglia
+        const grid = 25;
         const tCanvas = document.createElement('canvas');
-        tCanvas.width = 40; tCanvas.height = 40;
+        tCanvas.width = grid; tCanvas.height = grid;
         const tCtx = tCanvas.getContext('2d');
-        tCtx.drawImage(video, 0, 0, 40, 40);
-        const data = tCtx.getImageData(0, 0, 40, 40).data;
+        tCtx.drawImage(video, 0, 0, grid, grid);
+        const data = tCtx.getImageData(0, 0, grid, grid).data;
 
         let movement = 0;
         let brightness = 0;
+        const cellW = canvas.width / grid;
+        const cellH = canvas.height / grid;
 
-        if (prevData) {
-            for (let i = 0; i < data.length; i += 4) {
-                const d = Math.abs(data[i] - prevData[i]);
-                if (d > 15) movement += d; 
-                brightness += (data[i] + data[i+1] + data[i+2]) / 3;
+        for (let y = 0; y < grid; y++) {
+            for (let x = 0; x < grid; x++) {
+                const i = (y * grid + x) * 4;
+                const r = data[i], g = data[i+1], b = data[i+2];
+                const bright = (r + g + b) / 3;
+
+                // Calcolo movimento
+                if (prevData) {
+                    movement += Math.abs(r - prevData[i]);
+                }
+
+                // Disegno SFERE (Ripristinate)
+                if (bright > 140) {
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.4)`;
+                    ctx.beginPath();
+                    ctx.arc(x * cellW + cellW/2, y * cellH + cellH/2, bright/10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                brightness += bright;
             }
         }
         prevData = new Uint8ClampedArray(data);
-        const avgB = brightness / (40 * 40);
+        const avgB = brightness / (grid * grid);
 
-        // --- GESTIONE SILENZIO v05 ---
-        // Soglia molto bassa per non perdere reattività
-        if (movement < 4000) { 
-            masterGain.volume.rampTo(-Infinity, 0.5);
+        // --- GESTIONE AUDIO v06 ---
+        if (movement < 8000) { 
+            masterGain.volume.rampTo(-Infinity, 1.5);
             if (lastNote !== "") { synth.releaseAll(); lastNote = ""; }
         } else {
-            masterGain.volume.rampTo(-6, 0.2);
+            masterGain.volume.rampTo(-8, 0.4);
             
             const nIdx = Math.floor((avgB / 255) * notes.length);
             const currentNote = notes[nIdx % notes.length];
 
-            if (currentNote !== lastNote && avgB > 30) {
-                // Trigger immediato
-                synth.triggerAttackRelease(currentNote, "1n", undefined, 0.5);
+            if (currentNote !== lastNote && avgB > 40) {
+                synth.triggerAttackRelease(currentNote, "1n", undefined, 0.4);
                 lastNote = currentNote;
             }
-        }
-
-        // Feedback Visivo Sottile
-        if (movement > 4000) {
-            ctx.fillStyle = "rgba(255,255,255,0.4)";
-            ctx.beginPath();
-            ctx.arc(canvas.width/2, canvas.height/2, movement/1000, 0, Math.PI*2);
-            ctx.stroke();
         }
 
         requestAnimationFrame(render);
