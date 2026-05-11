@@ -6,7 +6,7 @@
     <title>Synesthesia</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        /* Interfaccia Minimalista */
+        /* Interfaccia Minimalista richiesta */
         body { 
             margin: 0; 
             background: #000; 
@@ -20,7 +20,7 @@
             height: 100vh; 
         }
 
-        /* Il video occupa tutto lo schermo, visibilità piena */
+        /* Video e Canvas a pieno schermo per visibilità totale del viso */
         #video, #canvas { 
             position: absolute; 
             width: 100%; 
@@ -29,7 +29,7 @@
             z-index: 1;
         }
 
-        /* UI sovrapposta che sparirà completamente */
+        /* UI che scompare completamente dopo l'inizio */
         #ui { 
             z-index: 10; 
             text-align: center; 
@@ -73,7 +73,7 @@
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // Configurazione Audio
+    // Configurazione Audio Originale
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
     
@@ -82,8 +82,8 @@
         envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
 
-    // Volume aumentato
-    synth.volume.value = 10; 
+    // Volume ripristinato all'originale (default 0 dB)
+    synth.volume.value = 0; 
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
 
@@ -100,7 +100,7 @@
         await Tone.start();
         await setupCamera();
         
-        // Rimuove completamente l'interfaccia
+        // Rimuove ogni scritta e pulsante dallo schermo
         ui.style.opacity = "0";
         setTimeout(() => { ui.style.display = 'none'; }, 1000);
         
@@ -108,7 +108,7 @@
     });
 
     function analyze() {
-        // Manteniamo il canvas trasparente o sincronizzato per non coprire il video
+        // Area di analisi
         canvas.width = 64; 
         canvas.height = 64;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -140,8 +140,8 @@
 
         if (currentNote !== lastNote) {
             synth.releaseAll();
-            // Espressione sonora basata sulla saturazione (verde)
-            synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.2, 0.6));
+            // Velocity originale
+            synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.1, 0.5));
             lastNote = currentNote;
         }
     }
