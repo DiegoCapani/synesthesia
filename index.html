@@ -6,12 +6,15 @@
     <title>Eco-Sinestesia | Stazione 01</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; height: 100vh; }
-        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: screen; }
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
-        .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 40px; }
-        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 40px; cursor: pointer; letter-spacing: 3px; }
+        body { margin: 0; background: #000; color: #fff; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; overflow: hidden; height: 100vh; }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; filter: brightness(1.1) contrast(1.1); }
+        #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: additive; }
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
+        .container { text-align: center; border: 1px solid rgba(255,255,255,0.3); padding: 40px; background: rgba(0,0,0,0.8); }
+        .label { letter-spacing: 5px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.6; }
+        h1 { font-weight: 200; letter-spacing: 2px; margin-bottom: 30px; text-transform: uppercase; }
+        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 35px; cursor: pointer; font-size: 0.9em; letter-spacing: 3px; transition: 0.3s; }
+        button:hover { background: #fff; color: #000; }
     </style>
 </head>
 <body>
@@ -21,8 +24,9 @@
 
     <div id="ui">
         <div class="container">
-            <h1 style="font-weight: 100; letter-spacing: 5px;">STAZIONE 01</h1>
-            <button id="startBtn">ATTIVA SINESTESIA</button>
+            <div class="label">CITTÀ VISIBILE 2026</div>
+            <h1>STAZIONE 01: ECO-SINESTESIA</h1>
+            <button id="startBtn">ATTIVA SCANSIONE</button>
         </div>
     </div>
 
@@ -32,79 +36,103 @@
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // AUDIO SETUP
+    // --- ENGINE MUSICALE NEW AGE ---
     const reverb = new Tone.Reverb({ decay: 10, wet: 0.6 }).toDestination();
-    const delay = new Tone.FeedbackDelay("4n", 0.3).connect(reverb);
+    const delay = new Tone.FeedbackDelay("4n", 0.4).connect(reverb);
+    
+    // Sintetizzatore Melodico (Gocce di cristallo)
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 1.5, release: 4 }
+        envelope: { attack: 0.5, decay: 0.2, sustain: 0.4, release: 2 }
     }).connect(delay);
-    synth.volume.value = -8;
 
-    const scale = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
-    let avgBright = 0;
+    // Sintetizzatore Drone (Tappeto armonico profondo)
+    const drone = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "fatsawtooth", count: 3, spread: 30 },
+        envelope: { attack: 4, release: 4 }
+    }).connect(reverb);
+
+    synth.volume.value = -10;
+    drone.volume.value = -25;
+
+    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"]; // Pentatonica Maggiore
+    let currentBright = 0;
+    let currentR = 127;
 
     async function start() {
-        await Tone.start();
-        await Tone.context.resume(); // CRUCIALE per il suono
-        
         try {
+            await Tone.start();
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
+            
             video.onloadedmetadata = () => {
                 video.play();
                 ui.style.opacity = '0';
                 setTimeout(() => ui.style.display = 'none', 1000);
                 
-                // Arpeggiatore melodico
-                const loop = new Tone.Loop(time => {
-                    if (avgBright > 40) {
-                        const note = scale[Math.floor(Tone.Math.mapLinear(avgBright, 40, 200, 0, scale.length - 1))];
-                        synth.triggerAttackRelease(note, "2n", time, 0.4);
-                    }
-                }, "4n").start(0);
-                
+                // Avvia la struttura ritmica musicale
+                Tone.Transport.bpm.value = 60; // Tempo calmo
+                Tone.Transport.scheduleRepeat(sequence, "8n");
                 Tone.Transport.start();
+
+                // Accende il tappeto armonico fisso
+                drone.triggerAttack(["C3", "G3"]);
+                
                 render();
             };
-        } catch (e) { alert("Attiva fotocamera"); }
+        } catch (e) { alert("Accesso camera negato."); }
+    }
+
+    // Funzione che compone la melodia a tempo
+    function sequence(time) {
+        if (currentBright > 40) {
+            // Sceglie la nota in base alla luminosità attuale
+            const nIdx = Math.floor((currentBright / 256) * notes.length);
+            const note = notes[nIdx % notes.length];
+            
+            // Probabilità di suonare: crea un ritmo meno meccanico
+            if (Math.random() > 0.4) {
+                const velocity = (currentBright / 255) * 0.5 + 0.1;
+                synth.triggerAttackRelease(note, "4n", time, velocity);
+            }
+        }
     }
 
     function render() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-
-        // Analisi Pixel (Griglia 20x20)
-        const size = 20;
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = size; tempCanvas.height = size;
-        const tCtx = tempCanvas.getContext('2d');
-        tCtx.drawImage(video, 0, 0, size, size);
-        const pixels = tCtx.getImageData(0, 0, size, size).data;
-
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        let totalBrightness = 0;
-        const cellW = canvas.width / size;
-        const cellH = canvas.height / size;
+        const tCanvas = document.createElement('canvas');
+        tCanvas.width = 40; tCanvas.height = 40;
+        const tCtx = tCanvas.getContext('2d');
+        tCtx.drawImage(video, 0, 0, 40, 40);
+        const data = tCtx.getImageData(0, 0, 40, 40).data;
 
-        for (let y = 0; y < size; y++) {
-            for (let x = 0; x < size; x++) {
-                const i = (y * size + x) * 4;
-                const r = pixels[i], g = pixels[i+1], b = pixels[i+2];
+        let rSum = 0, gSum = 0, bSum = 0;
+
+        for (let y = 0; y < 40; y += 2) {
+            for (let x = 0; x < 40; x += 2) {
+                const i = (y * 40 + x) * 4;
+                const r = data[i], g = data[i+1], b = data[i+2];
                 const bright = (r + g + b) / 3;
-                totalBrightness += bright;
 
-                if (bright > 130) { // Disegna sfere solo sulle zone luminose (viso)
-                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.4)`;
+                if (bright > 150) {
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.5)`;
+                    const px = (x / 40) * canvas.width;
+                    const py = (y / 40) * canvas.height;
                     ctx.beginPath();
-                    // Coordinate mappate correttamente sulla griglia del volto
-                    ctx.arc(x * cellW + cellW/2, y * cellH + cellH/2, bright/8, 0, Math.PI * 2);
+                    ctx.arc(px, py, bright/40, 0, Math.PI * 2);
                     ctx.fill();
                 }
+                rSum += r; gSum += g; bSum += b;
             }
         }
-        avgBright = totalBrightness / (size * size);
+
+        const count = (40*40)/4;
+        currentBright = (rSum + gSum + bSum) / (count * 3);
+        currentR = rSum / count;
+
         requestAnimationFrame(render);
     }
 
