@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Synesthesia | Stazione 01</title>
+    <title>Synesthesia | Realistic</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { 
@@ -13,25 +13,31 @@
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
             overflow: hidden; 
             display: flex; 
-            flex-direction: column; 
             align-items: center; 
             justify-content: center; 
             height: 100vh; 
         }
         
-        #video, #canvas { 
+        /* Video realistico a pieno schermo */
+        #video { 
             position: absolute; 
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            opacity: 0.5; 
+            opacity: 1; /* Rimosso ogni effetto di trasparenza */
+            z-index: 1;
+        }
+        
+        /* Canvas nascosto (serve solo per i calcoli matematici) */
+        #canvas { 
+            display: none; 
         }
         
         #ui { 
             z-index: 10; 
             text-align: center; 
-            background: rgba(0,0,0,0.5); 
-            padding: 30px; 
+            background: rgba(0,0,0,0.6); 
+            padding: 40px; 
             border: 1px solid #ffffff; 
             transition: opacity 0.5s ease;
         }
@@ -40,11 +46,12 @@
             background: transparent; 
             color: #ffffff; 
             border: 1px solid #ffffff; 
-            padding: 12px 24px; 
+            padding: 14px 28px; 
             cursor: pointer; 
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-            font-size: 0.8em; 
-            letter-spacing: 1px;
+            font-family: inherit; 
+            font-size: 0.9em; 
+            letter-spacing: 2px;
+            text-transform: uppercase;
             transition: all 0.3s ease;
         }
         
@@ -54,17 +61,11 @@
         }
         
         .label { 
-            margin-bottom: 15px; 
-            font-size: 1em; 
+            margin-bottom: 20px; 
+            font-size: 1.2em; 
             text-transform: uppercase;
-            letter-spacing: 3px; 
-            opacity: 0.8;
-        }
-
-        #status {
-            font-size: 0.7em;
-            margin-top: 15px;
-            letter-spacing: 1px;
+            letter-spacing: 4px; 
+            font-weight: 200;
         }
     </style>
 </head>
@@ -75,8 +76,7 @@
 
     <div id="ui">
         <div class="label">Synesthesia</div>
-        <button id="startBtn">Tocca per iniziare</button>
-        <p id="status">...|||...</p>
+        <button id="startBtn">Avvia Esperienza</button>
     </div>
 
 <script>
@@ -86,15 +86,15 @@
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // Audio Setup
-    const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
+    // Configurazione Audio
+    const reverb = new Tone.Reverb({ decay: 5, wet: 0.4 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
+        envelope: { attack: 0.8, decay: 1, sustain: 0.7, release: 3 }
     }).connect(filter);
 
-    synth.volume.value = 8; 
+    synth.volume.value = 6; 
 
     const notes = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "C5"];
     
@@ -114,12 +114,13 @@
     startBtn.addEventListener('click', async () => {
         await Tone.start();
         await setupCamera();
-        ui.style.display = 'none'; 
+        ui.style.opacity = "0";
+        setTimeout(() => ui.style.display = 'none', 500);
         analyze();
     });
 
     function analyze() {
-        // Disegno diretto senza accumulo per eliminare l'effetto ghost
+        // Analisi a bassa risoluzione per fluidità sonora
         canvas.width = 64; 
         canvas.height = 64;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -130,9 +131,9 @@
 
         if (prevFrame) {
             for (let i = 0; i < currentFrame.data.length; i += 4) {
-                // Rilevamento movimento pixel per pixel
+                // Calcolo del movimento puro
                 const diff = Math.abs(currentFrame.data[i] - prevFrame.data[i]);
-                if (diff > 15) motionTotal += diff; 
+                if (diff > 20) motionTotal += diff; 
 
                 rSum += currentFrame.data[i];
                 gSum += currentFrame.data[i+1];
@@ -144,13 +145,11 @@
 
         const count = canvas.width * canvas.height;
         const r = rSum / count;
-        const g = gSum / count;
-        const b = bSum / count;
-        const avgBright = (r + g + b) / 3;
+        const avgBright = (r + (gSum/count) + (bSum/count)) / 3;
 
-        // Soglia di movimento dinamica per attivare/disattivare il suono
-        if (motionTotal > 3000) { 
-            updateSound(r, g, b, avgBright, true);
+        // Se ti muovi suona, se ti fermi silenzia
+        if (motionTotal > 4000) { 
+            updateSound(r, avgBright, true);
             isPlaying = true;
         } else {
             if (isPlaying) {
@@ -163,17 +162,16 @@
         requestAnimationFrame(analyze);
     }
 
-    function updateSound(r, g, b, brightness, shouldPlay) {
-        // Normalizzazione per tonalità scure: mappa 0-120 invece di 0-255
-        const noteIndex = Math.floor(mapRange(Math.min(brightness, 120), 0, 120, 0, notes.length - 1));
+    function updateSound(r, brightness, shouldPlay) {
+        // Mappatura sensibile anche al buio (range 0-130)
+        const noteIndex = Math.floor(mapRange(Math.min(brightness, 130), 0, 130, 0, notes.length - 1));
         const currentNote = notes[noteIndex];
 
-        // Filtro legato al canale rosso (viso/pelle)
-        filter.frequency.rampTo(mapRange(Math.min(r, 150), 0, 150, 400, 2500), 0.3);
+        // Il filtro reagisce al calore cromatico
+        filter.frequency.rampTo(mapRange(Math.min(r, 150), 0, 150, 400, 2200), 0.3);
 
         if (currentNote !== lastNote && shouldPlay) {
             synth.releaseAll();
-            // Volume di attacco bilanciato
             synth.triggerAttack(currentNote, "+0.05", 0.5);
             lastNote = currentNote;
         }
