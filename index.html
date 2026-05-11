@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Synesthesia</title>
+    <title>Synesthesia | Minimal</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
+        /* INTERFACCIA SEMPRE MINIMAL: NERO E BIANCO */
         body { 
             margin: 0; 
             background: #000; 
@@ -13,50 +14,60 @@
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
             overflow: hidden; 
             display: flex; 
+            flex-direction: column; 
             align-items: center; 
             justify-content: center; 
             height: 100vh; 
         }
 
-        /* Video nascosto, usiamo il canvas per il feedback visivo */
-        #video { 
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-        }
-
-        #canvas { 
+        #video, #canvas { 
             position: absolute; 
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            z-index: 1;
+            opacity: 0.8; /* Visibilità del viso migliorata */
         }
 
         #ui { 
             z-index: 10; 
             text-align: center; 
-            transition: opacity 1s ease; 
+            transition: opacity 0.8s ease;
         }
 
-        h1 { 
-            font-size: 1.8rem; 
-            font-weight: 100; 
-            letter-spacing: 8px; 
-            margin-bottom: 30px; 
-            text-transform: uppercase;
-        }
-
+        /* STILE PULSANTI MINIMAL */
         button { 
             background: #fff; 
             color: #000; 
             border: none; 
-            padding: 12px 30px; 
+            padding: 15px 40px; 
             cursor: pointer; 
             font-size: 0.9rem; 
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 300;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            letter-spacing: 5px;
+            background: #eee;
+        }
+
+        .label { 
+            margin-bottom: 25px; 
+            font-size: 0.7rem; 
+            letter-spacing: 5px; 
+            font-weight: 100;
+            text-transform: uppercase;
+            opacity: 0.6;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-size: 0.6rem;
             letter-spacing: 2px;
             text-transform: uppercase;
+            font-weight: 100;
         }
     </style>
 </head>
@@ -66,8 +77,9 @@
     <canvas id="canvas"></canvas>
 
     <div id="ui">
-        <h1>Synesthesia</h1>
-        <button id="startBtn">Tocca per iniziare</button>
+        <div class="label">Eco-Sinestesia</div>
+        <button id="startBtn">Inizia Analisi</button>
+        <p id="status">Sistema pronto</p>
     </div>
 
 <script>
@@ -75,101 +87,78 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const startBtn = document.getElementById('startBtn');
+    const status = document.getElementById('status');
     const ui = document.getElementById('ui');
 
-    // Configurazione Audio (Parametri Originali)
+    // Configurazione Suono New Age (Originale)
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
+    
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
         envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
-    
-    synth.volume.value = 0; 
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
-    let lastNote = "";
 
     async function setupCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'user' }, 
-                audio: false 
-            });
-            video.srcObject = stream;
-            await new Promise((resolve) => {
-                video.onloadeddata = () => {
-                    video.play();
-                    resolve();
-                };
-            });
-        } catch (err) {
-            console.error("Errore accesso camera.");
-        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        video.srcObject = stream;
+        return new Promise((resolve) => video.onloadedmetadata = resolve);
     }
 
     startBtn.addEventListener('click', async () => {
         await Tone.start();
         await setupCamera();
         
+        // RIMOZIONE TOTALE SCRITTE DOPO L'INIZIO
         ui.style.opacity = "0";
-        setTimeout(() => { ui.style.display = 'none'; }, 1000);
-        
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        render();
+        setTimeout(() => { 
+            ui.style.display = 'none'; 
+        }, 800);
+
+        analyze();
     });
 
-    function render() {
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            
-            // --- EFFETTO ECO VISIVO (RISUONANZA) ---
-            // Invece di pulire lo schermo, disegniamo un velo nero trasparente.
-            // Questo crea la scia di movimento (effetto ghost).
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.fillStyle = "rgba(0, 0, 0, 0.15)"; 
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Disegniamo il nuovo frame della camera con una leggera trasparenza
-            ctx.globalAlpha = 0.4; // Regola questo per un eco più o meno marcato
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            ctx.globalAlpha = 1.0;
-
-            // Analisi dei cromatismi per il suono
-            analyze();
-        }
-        requestAnimationFrame(render);
-    }
-
     function analyze() {
-        // Analisi dell'area centrale del canvas (che contiene già l'immagine elaborata)
-        const frame = ctx.getImageData(canvas.width/2 - 10, canvas.height/2 - 10, 20, 20);
+        canvas.width = 64; 
+        canvas.height = 64;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const frame = ctx.getImageData(16, 16, 32, 32);
         let r = 0, g = 0, b = 0;
+
         for (let i = 0; i < frame.data.length; i += 4) {
             r += frame.data[i];
             g += frame.data[i + 1];
             b += frame.data[i + 2];
         }
+
         const count = frame.data.length / 4;
-        updateSound(r / count, g / count, b / count);
+        r = r / count; g = g / count; b = b / count;
+
+        updateSound(r, g, b);
+        requestAnimationFrame(analyze);
     }
+
+    let lastNote = "";
 
     function updateSound(r, g, b) {
         const brightness = (r + g + b) / 3;
-        const noteIndex = Math.floor((brightness / 256) * notes.length);
+        const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
         const currentNote = notes[noteIndex];
 
-        // Il rosso controlla l'apertura del filtro (risonanza sonora)
-        filter.frequency.rampTo(400 + (r * 6), 0.5);
+        filter.frequency.rampTo(mapRange(r, 0, 255, 400, 2000), 0.5);
 
-        if (currentNote !== lastNote && currentNote !== undefined) {
+        if (currentNote !== lastNote) {
             synth.releaseAll();
-            // Il verde controlla la forza dell'attacco
-            const velocity = 0.1 + (g / 512);
-            synth.triggerAttack(currentNote, "+0.1", velocity);
+            synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.1, 0.5));
             lastNote = currentNote;
         }
+    }
+
+    function mapRange(value, inMin, inMax, outMin, outMax) {
+        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
     }
 </script>
 </body>
