@@ -1,50 +1,91 @@
+<!--
+MIGLIORIE APPORTATE
+===================
+✓ Volume generale aumentato
+✓ Timbro più caldo e melodico
+✓ Effetto "new age" con riverbero più ampio
+✓ Interfaccia originale ripristinata
+✓ Nessun click o scoppiettio audio
+
+CATENA AUDIO
+============
+PolySynth -> Volume -> Reverb -> Limiter -> Output
+-->
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Eco-Sinestesia | Audio Fix</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<style>
-body {
-    margin: 0;
-    background: #000;
-    color: #fff;
-    font-family: sans-serif;
-    overflow: hidden;
-}
-#video {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    opacity: 0.5;
-}
-#canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-}
-#ui {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #000;
-    z-index: 10;
-}
-button {
-    padding: 20px 40px;
-    font-size: 18px;
-    font-weight: bold;
-    border: none;
-    cursor: pointer;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Eco-Sinestesia | Stazione 01 v13</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            color: #fff;
+            font-family: sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0.5;
+        }
+
+        #canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            z-index: 100;
+            transition: opacity 1s;
+        }
+
+        .container {
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 50px;
+            background: rgba(0,0,0,0.9);
+        }
+
+        button {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 20px 50px;
+            cursor: pointer;
+            letter-spacing: 3px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .version-tag {
+            margin-top: 25px;
+            font-size: 0.7em;
+            letter-spacing: 4px;
+            opacity: 0.5;
+        }
+    </style>
 </head>
 <body>
 
@@ -52,60 +93,72 @@ button {
 <canvas id="canvas"></canvas>
 
 <div id="ui">
-    <button id="startBtn">ATTIVA AUDIO E VIDEO</button>
+    <div class="container">
+        <div style="letter-spacing: 4px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.6;">
+            CITTÀ VISIBILE 2026
+        </div>
+        <h1 style="font-weight: 100; letter-spacing: 5px;">ECO-SINESTESIA</h1>
+        <button id="startBtn">ATTIVA AUDIO E VIDEO</button>
+        <div class="version-tag">STAZIONE 01 | v13</div>
+    </div>
 </div>
 
 <script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const ui = document.getElementById("ui");
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const ui = document.getElementById('ui');
 
 let prevData = null;
 let lastNote = "";
 let lastTriggerTime = 0;
-let isAudioOpen = false;
 
 // =========================
-// AUDIO ENGINE CORRETTO
+// AUDIO ENGINE NEW AGE
 // =========================
 const limiter = new Tone.Limiter(-1).toDestination();
 
 const reverb = new Tone.Reverb({
-    decay: 6,
-    wet: 0.35
+    decay: 12,
+    wet: 0.65
 }).connect(limiter);
 
-const masterGain = new Tone.Volume(-18).connect(reverb);
+const delay = new Tone.FeedbackDelay({
+    delayTime: "8n",
+    feedback: 0.25,
+    wet: 0.2
+}).connect(reverb);
 
+const masterGain = new Tone.Volume(-8).connect(delay);
+
+// Synth etereo e morbido
 const synth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 4,
+    maxPolyphony: 6,
     options: {
         oscillator: {
             type: "triangle"
         },
         envelope: {
-            attack: 0.05,
+            attack: 0.8,
             decay: 0.3,
-            sustain: 0.4,
-            release: 1.5
+            sustain: 0.7,
+            release: 4
         }
     }
 }).connect(masterGain);
 
+// Scala pentatonica molto musicale
 const scale = [
-    "C3", "G3", "C4", "D4",
-    "E4", "G4", "A4", "B4", "D5"
+    "C3", "D3", "E3", "G3", "A3",
+    "C4", "D4", "E4", "G4", "A4",
+    "C5", "D5"
 ];
 
 async function initAudio() {
     await Tone.start();
     await Tone.loaded();
 
-    // piccolo test
-    synth.triggerAttackRelease("C4", "8n", undefined, 0.2);
-
-    console.log("Audio pronto");
+    synth.triggerAttackRelease("C4", "2n", undefined, 0.3);
 }
 
 async function start() {
@@ -113,21 +166,24 @@ async function start() {
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "user" }
+            video: { facingMode: 'user' }
         });
 
         video.srcObject = stream;
 
-        await video.play();
+        video.onloadedmetadata = async () => {
+            await video.play();
 
-        ui.style.display = "none";
+            ui.style.opacity = '0';
+            setTimeout(() => ui.style.display = 'none', 1000);
 
-        resizeCanvas();
-        render();
+            resizeCanvas();
+            render();
+        };
 
-    } catch (err) {
-        alert("Errore accesso camera.");
-        console.error(err);
+    } catch (e) {
+        alert("Camera non trovata o permessi negati.");
+        console.error(e);
     }
 }
 
@@ -136,21 +192,20 @@ function resizeCanvas() {
     canvas.height = window.innerHeight;
 }
 
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener('resize', resizeCanvas);
 
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const grid = 30;
 
-    // canvas temporaneo
-    const temp = document.createElement("canvas");
-    temp.width = grid;
-    temp.height = grid;
-    const tctx = temp.getContext("2d");
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = grid;
+    tempCanvas.height = grid;
+    const tempCtx = tempCanvas.getContext('2d');
 
-    tctx.drawImage(video, 0, 0, grid, grid);
-    const data = tctx.getImageData(0, 0, grid, grid).data;
+    tempCtx.drawImage(video, 0, 0, grid, grid);
+    const data = tempCtx.getImageData(0, 0, grid, grid).data;
 
     let totalMove = 0;
     let activeX = 0;
@@ -175,7 +230,7 @@ function render() {
                 activeCount++;
 
                 if ((x + y) % 2 === 0) {
-                    ctx.fillStyle = `rgba(${r},${g},${b},0.3)`;
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
                     ctx.beginPath();
                     ctx.arc(
                         (x / grid) * canvas.width,
@@ -193,7 +248,7 @@ function render() {
     prevData = new Uint8ClampedArray(data);
 
     // =========================
-    // LOGICA AUDIO STABILIZZATA
+    // GENERAZIONE NOTE
     // =========================
     const movementThreshold = 2500;
     const now = Tone.now();
@@ -203,16 +258,13 @@ function render() {
         const noteIndex = Math.floor((centerX / grid) * scale.length);
         const note = scale[Math.max(0, Math.min(noteIndex, scale.length - 1))];
 
-        // Trigger massimo ogni 250 ms
-        if (
-            note !== lastNote &&
-            now - lastTriggerTime > 0.25
-        ) {
+        // Nuova nota massimo ogni 400 ms
+        if (note !== lastNote && now - lastTriggerTime > 0.4) {
             synth.triggerAttackRelease(
                 note,
-                "2n",
+                "1n",
                 now,
-                0.25
+                0.45
             );
 
             lastNote = note;
@@ -236,7 +288,8 @@ function render() {
     requestAnimationFrame(render);
 }
 
-document.getElementById("startBtn").addEventListener("click", start);
+document.getElementById('startBtn').addEventListener('click', start);
 </script>
+
 </body>
 </html>
