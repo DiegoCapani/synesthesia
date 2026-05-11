@@ -114,4 +114,36 @@
         for (let i = 0; i < frame.data.length; i += 4) {
             r += frame.data[i];
             g += frame.data[i + 1];
-            b += frame.
+            b += frame.data[i + 2];
+        }
+
+        const count = frame.data.length / 4;
+        r /= count; g /= count; b /= count;
+
+        updateSound(r, g, b);
+        requestAnimationFrame(analyze);
+    }
+
+    let lastNote = "";
+
+    function updateSound(r, g, b) {
+        const brightness = (r + g + b) / 3;
+        const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
+        const currentNote = notes[noteIndex];
+
+        if (currentNote !== lastNote) {
+            // Piccolo fade out per evitare scoppiettii nel cambio nota
+            synth.releaseAll(); 
+            // Volume basato sulla luminosità (velocity)
+            const vel = mapRange(g, 0, 255, 0.2, 0.6);
+            synth.triggerAttack(currentNote, Tone.now(), vel);
+            lastNote = currentNote;
+        }
+    }
+
+    function mapRange(value, inMin, inMax, outMin, outMax) {
+        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+    }
+</script>
+</body>
+</html>
