@@ -6,7 +6,6 @@
     <title>Synesthesia</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        /* Interfaccia Minimalista richiesta */
         body { 
             margin: 0; 
             background: #000; 
@@ -20,8 +19,9 @@
             height: 100vh; 
         }
 
-        /* Video e Canvas a pieno schermo per visibilità totale del viso */
-        #video, #canvas { 
+        #video { display: none; } /* Video nascosto per usare solo il canvas artistico */
+
+        #canvas { 
             position: absolute; 
             width: 100%; 
             height: 100%; 
@@ -29,7 +29,6 @@
             z-index: 1;
         }
 
-        /* UI che scompare completamente dopo l'inizio */
         #ui { 
             z-index: 10; 
             text-align: center; 
@@ -69,7 +68,7 @@
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
@@ -82,10 +81,11 @@
         envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
 
-    // Volume ripristinato all'originale (default 0 dB)
     synth.volume.value = 0; 
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
+    let lastNote = "";
+    let ghostIntensity = 0.2; // Intensità base dell'eco visiva
 
     async function setupCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -93,29 +93,52 @@
             audio: false 
         });
         video.srcObject = stream;
-        return new Promise((resolve) => video.onloadedmetadata = resolve);
+        return new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                resolve();
+            };
+        });
     }
 
     startBtn.addEventListener('click', async () => {
         await Tone.start();
         await setupCamera();
         
-        // Rimuove ogni scritta e pulsante dallo schermo
         ui.style.opacity = "0";
         setTimeout(() => { ui.style.display = 'none'; }, 1000);
         
-        analyze();
+        render();
     });
 
-    function analyze() {
-        // Area di analisi
-        canvas.width = 64; 
-        canvas.height = 64;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    function render() {
+        // EFFETTO GHOST: Disegna un rettangolo semitrasparente invece di pulire il frame
+        ctx.fillStyle = `rgba(0, 0, 0, ${ghostIntensity})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        const frame = ctx.getImageData(16, 16, 32, 32);
-        let r = 0, g = 0, b = 0;
+        // Disegna il video corrente in semitrasparenza sopra i frame precedenti
+        ctx.globalAlpha = 0.8;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1.0;
 
+        // Recupera i dati per l'analisi sonora
+        analyzePixels();
+
+        // Riporta lentamente l'intensità del ghost al valore base
+        if (ghostIntensity > 0.15) ghostIntensity -= 0.01;
+
+        requestAnimationFrame(render);
+    }
+
+    function analyzePixels() {
+        // Usiamo un piccolo estratto dal centro del canvas per l'analisi
+        const size = 10;
+        const x = Math.floor(canvas.width / 2 - size / 2);
+        const y = Math.floor(canvas.height / 2 - size / 2);
+        const frame = ctx.getImageData(x, y, size, size);
+        
+        let r = 0, g = 0, b = 0;
         for (let i = 0; i < frame.data.length; i += 4) {
             r += frame.data[i];
             g += frame.data[i + 1];
@@ -123,13 +146,8 @@
         }
 
         const count = frame.data.length / 4;
-        r /= count; g /= count; b /= count;
-
-        updateSound(r, g, b);
-        requestAnimationFrame(analyze);
+        updateSound(r / count, g / count, b / count);
     }
-
-    let lastNote = "";
 
     function updateSound(r, g, b) {
         const brightness = (r + g + b) / 3;
@@ -140,14 +158,17 @@
 
         if (currentNote !== lastNote) {
             synth.releaseAll();
-            // Velocity originale
             synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.1, 0.5));
+            
+            // Reazione visiva al cambio nota: aumenta l'effetto eco/ghost
+            ghostIntensity = 0.05; 
+            
             lastNote = currentNote;
         }
     }
 
     function mapRange(value, inMin, inMax, outMin, outMax) {
-        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+        return Math.min(outMax, Math.max(outMin, (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin));
     }
 </script>
 </body>
