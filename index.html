@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Eco-Sinestesia | Stazione 01 v13</title>
+<title>Eco-Sinestesia | Installazione Museale</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 
 <style>
@@ -22,7 +22,7 @@ body {
     height: 100%;
     object-fit: cover;
     z-index: 1;
-    opacity: 0.5;
+    opacity: 0.55;
 }
 
 #canvas {
@@ -80,87 +80,83 @@ button {
 
 <div id="ui">
     <div class="container">
-        <div style="letter-spacing:4px;font-size:0.7em;opacity:0.6;">CITTÀ VISIBILE 2026</div>
-        <h1 style="font-weight:100;letter-spacing:5px;">ECO-SINESTESIA</h1>
-        <button id="startBtn">ATTIVA AUDIO E VIDEO</button>
-        <div class="version-tag">STAZIONE 01 | v13</div>
+        <div style="letter-spacing:4px;font-size:0.7em;opacity:0.6;">
+            INSTALLAZIONE MUSEALE 2026
+        </div>
+        <h1 style="font-weight:100;letter-spacing:5px;">
+            ECO-SINESTESIA
+        </h1>
+        <button id="startBtn">ATTIVA INSTALLAZIONE</button>
+        <div class="version-tag">CORPO = SUONO</div>
     </div>
 </div>
 
 <script>
 
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const ui = document.getElementById('ui');
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const ui = document.getElementById("ui");
 
 let prevData = null;
-let lastNote = "";
-let lastTriggerTime = 0;
 
 // =========================
-// VELOCITÀ CORPO
-// =========================
-let prevCenterX = null;
-let prevCenterY = null;
-let prevTime = null;
-
-// =========================
-// AUDIO NEW AGE
+// AUDIO INSTALLAZIONE
 // =========================
 
-const limiter = new Tone.Limiter(-0.5).toDestination();
+const limiter = new Tone.Limiter(-0.3).toDestination();
 
 const reverb = new Tone.Reverb({
-    decay: 18,
-    wet: 0.85
+    decay: 22,
+    wet: 0.92
 }).connect(limiter);
 
 const delay = new Tone.FeedbackDelay({
-    delayTime: "4n",
-    feedback: 0.35,
-    wet: 0.25
+    delayTime: "8n",
+    feedback: 0.4,
+    wet: 0.3
 }).connect(reverb);
 
 const chorus = new Tone.Chorus({
-    frequency: 0.2,
-    delayTime: 8,
-    depth: 0.7,
-    wet: 0.45
+    frequency: 0.15,
+    delayTime: 10,
+    depth: 0.8,
+    wet: 0.5
 }).connect(delay);
 chorus.start();
 
-const masterGain = new Tone.Volume(-2).connect(chorus);
+// 🔊 volume più alto (installazione fisica)
+const masterGain = new Tone.Volume(2).connect(chorus);
 
-// synth principale
+// corpo sonoro principale
 const synth = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 8,
+    maxPolyphony: 10,
     options: {
         oscillator: { type: "sine" },
         envelope: {
+            attack: 1.8,
+            decay: 0.6,
+            sustain: 1,
+            release: 10
+        }
+    }
+}).connect(masterGain);
+
+// layer etereo
+const shimmer = new Tone.PolySynth(Tone.Synth, {
+    maxPolyphony: 8,
+    options: {
+        oscillator: { type: "triangle" },
+        envelope: {
             attack: 1.5,
             decay: 0.8,
-            sustain: 0.9,
+            sustain: 0.7,
             release: 8
         }
     }
 }).connect(masterGain);
 
-// armonico
-const shimmer = new Tone.PolySynth(Tone.Synth, {
-    maxPolyphony: 6,
-    options: {
-        oscillator: { type: "triangle" },
-        envelope: {
-            attack: 1.2,
-            decay: 0.5,
-            sustain: 0.6,
-            release: 6
-        }
-    }
-}).connect(masterGain);
-
-// scala
+// scala armonica
 const scale = [
 "C3","D3","E3","G3","A3",
 "C4","D4","E4","G4","A4",
@@ -169,13 +165,13 @@ const scale = [
 
 async function initAudio() {
     await Tone.start();
-    await Tone.loaded();
 
     synth.triggerAttackRelease("C4","2n",undefined,0.6);
     shimmer.triggerAttackRelease("G4","1n",undefined,0.3);
 }
 
 async function start() {
+
     await initAudio();
 
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -190,23 +186,24 @@ async function start() {
         ui.style.opacity = 0;
         setTimeout(()=>ui.style.display="none",1000);
 
-        resizeCanvas();
-        render();
+        resize();
+        loop();
     };
 }
 
-function resizeCanvas(){
+function resize(){
     canvas.width = innerWidth;
     canvas.height = innerHeight;
 }
 
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", resize);
 
 // =========================
-// LOOP VISIVO + SUONO
+// INSTALLAZIONE SONORA
 // =========================
 
-function render(){
+function loop(){
+
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
     const grid = 30;
@@ -226,7 +223,7 @@ function render(){
     for(let y=0;y<grid;y++){
         for(let x=0;x<grid;x++){
 
-            const i = (y*grid+x)*4;
+            const i=(y*grid+x)*4;
             const r=data[i],g=data[i+1],b=data[i+2];
 
             const bright=(r+g+b)/3;
@@ -254,62 +251,47 @@ function render(){
     prevData = new Uint8ClampedArray(data);
 
     const now = Tone.now();
-    const nowMs = performance.now();
 
-    let speed = 0;
-    let intensity = 0;
+    // energia del corpo nello spazio
+    const energy = Math.min(totalMove/4000,1);
+
+    let centerX = canvas.width/2;
+    let noteIndex = 0;
+    let note = "C4";
 
     if(activeCount>0){
 
-        const centerX = activeX/activeCount;
-        const centerY = activeCount/(grid*grid)*grid;
+        centerX = activeX/activeCount;
 
-        if(prevCenterX!==null && prevTime!==null){
+        noteIndex = Math.floor((centerX/grid)*scale.length);
+        note = scale[Math.max(0,Math.min(noteIndex,scale.length-1))];
 
-            const dx=centerX-prevCenterX;
-            const dy=centerY-prevCenterY;
-            const dt=nowMs-prevTime;
+        // volume globale installazione
+        const volume = -1 + energy*5;
 
-            const dist=Math.sqrt(dx*dx+dy*dy);
-            speed=dist/(dt||1);
-        }
+        synth.volume.value = volume;
+        shimmer.volume.value = volume - 4;
 
-        intensity=Math.min(speed*8,1);
+        // suono continuo del corpo (non a impulsi)
+        synth.triggerAttack(note, now);
 
-        prevCenterX=centerX;
-        prevCenterY=centerY;
-        prevTime=nowMs;
+        const harmony = scale[Math.min(scale.length-1,noteIndex+2)];
+        shimmer.triggerAttack(harmony, now);
 
-        const noteIndex=Math.floor((centerX/grid)*scale.length);
-        const note=scale[Math.max(0,Math.min(noteIndex,scale.length-1))];
+    } else {
+        synth.releaseAll();
+        shimmer.releaseAll();
+    }
 
-        if(totalMove>2500 && now-lastTriggerTime>0.4){
-
-            const gain=0.3+intensity*0.9;
-            const duration=intensity>0.6?"8n":"2n";
-
-            synth.triggerAttackRelease(note,duration,now,gain);
-
-            if(intensity>0.2){
-                const h=Math.min(scale.length-1,noteIndex+2);
-                shimmer.triggerAttackRelease(
-                    scale[h],
-                    intensity>0.6?"16n":"1n",
-                    now+0.03,
-                    gain*0.6
-                );
-            }
-
-            lastTriggerTime=now;
-        }
-
+    // visual centro energia
+    if(activeCount>0){
         ctx.strokeStyle="white";
         ctx.beginPath();
         ctx.arc(canvas.width/2,canvas.height/2,20,0,Math.PI*2);
         ctx.stroke();
     }
 
-    requestAnimationFrame(render);
+    requestAnimationFrame(loop);
 }
 
 document.getElementById("startBtn").addEventListener("click",start);
