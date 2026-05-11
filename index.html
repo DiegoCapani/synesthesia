@@ -43,9 +43,9 @@
             padding: 12px 24px; 
             cursor: pointer; 
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-            font-size: 1em; 
+            font-size: 0.8em; 
             letter-spacing: 1px;
-            text-transform: uppercase;
+            //text-transform: uppercase;
             transition: all 0.3s ease;
         }
         
@@ -56,7 +56,8 @@
         
         .label { 
             margin-bottom: 15px; 
-            font-size: 0.8em; 
+            font-size: 1em; 
+            text-transform: uppercase;
             letter-spacing: 3px; 
             opacity: 0.8;
         }
@@ -97,7 +98,7 @@
     }).connect(filter);
 
     // VOLUME
-    synth.volume.value = 6; // 0 standrad - +6 decibel (circa il doppio del volume percepito)
+    synth.volume.value = 5; // 0 standard - +6 decibel (circa il doppio del volume percepito)
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
 
