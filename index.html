@@ -19,18 +19,12 @@
             height: 100vh; 
         }
         
-        /* Video originale nascosto */
-        #video { 
-            display: none; 
-        }
-        
-        /* Il canvas mostra l'effetto arcobaleno a pieno schermo */
-        #canvas { 
+        #video, #canvas { 
             position: absolute; 
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            opacity: 1; /* Opacità piena per vedere i colori */
+            opacity: 0.5; 
         }
         
         #ui { 
@@ -51,6 +45,7 @@
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
             font-size: 0.8em; 
             letter-spacing: 2px;
+            //text-transform: uppercase;
             transition: all 0.3s ease;
         }
         
@@ -103,12 +98,10 @@
         envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
 
-    synth.volume.value = 5; 
+    // VOLUME
+    synth.volume.value = 5; // 0 standard - +6 decibel (circa il doppio del volume percepito)
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
-    
-    // Variabile per l'effetto arcobaleno
-    let hue = 0;
 
     async function setupCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
@@ -119,38 +112,19 @@
     startBtn.addEventListener('click', async () => {
         await Tone.start();
         await setupCamera();
+        
+        // Rimuove l'interfaccia UI non appena la camera è avviata
         ui.style.display = 'none'; 
+        
         analyze();
     });
 
     function analyze() {
-        // Manteniamo le dimensioni per l'effetto scia
-        if (canvas.width !== 320) {
-            canvas.width = 320;
-            canvas.height = 240;
-        }
-
-        // --- INIZIO EFFETTO SCIA ARCOBALENO ---
-        ctx.globalCompositeOperation = 'source-over';
-        // Rettangolo nero semitrasparente per creare la scia (ghosting)
-        ctx.fillStyle = "rgba(0, 0, 0, 0.1)"; 
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Cambiamo il colore (hue) ogni frame
-        hue = (hue + 2) % 360; 
-        ctx.filter = `hue-rotate(${hue}deg) saturate(1.5) brightness(1.2)`;
-        
-        // Disegniamo il video sopra la scia precedente
-        ctx.globalCompositeOperation = 'lighter'; 
+        canvas.width = 64; 
+        canvas.height = 64;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Reset dei filtri per l'analisi audio pulita
-        ctx.filter = 'none';
-        ctx.globalCompositeOperation = 'source-over';
-        // --- FINE EFFETTO VISIVO ---
-
-        // Analisi dati RGB (rimane come nel tuo riferimento)
-        const frame = ctx.getImageData(canvas.width/4, canvas.height/4, canvas.width/2, canvas.height/2);
+        const frame = ctx.getImageData(16, 16, 32, 32);
         let r = 0, g = 0, b = 0;
 
         for (let i = 0; i < frame.data.length; i += 4) {
