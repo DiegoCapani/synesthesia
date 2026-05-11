@@ -18,6 +18,7 @@
             justify-content: center; 
             height: 100vh; 
         }
+        
         #video, #canvas { 
             position: absolute; 
             width: 100%; 
@@ -25,25 +26,46 @@
             object-fit: cover; 
             opacity: 0.5; 
         }
+        
         #ui { 
             z-index: 10; 
             text-align: center; 
             background: rgba(0,0,0,0.5); 
             padding: 30px; 
             border: 1px solid #ffffff; 
+            transition: opacity 0.5s ease;
         }
+        
         button { 
             background: transparent; 
             color: #ffffff; 
             border: 1px solid #ffffff; 
             padding: 12px 24px; 
             cursor: pointer; 
-            font-family: inherit; 
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
             font-size: 0.8em; 
-            letter-spacing: 2px;
-            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
         }
-        .label { margin-bottom: 15px; font-size: 1em; text-transform: uppercase; letter-spacing: 5px; }
+        
+        button:hover { 
+            background: #ffffff; 
+            color: #000; 
+        }
+        
+        .label { 
+            margin-bottom: 15px; 
+            font-size: 1em; 
+            text-transform: uppercase;
+            letter-spacing: 3px; 
+            opacity: 0.8;
+        }
+
+        #status {
+            font-size: 0.7em;
+            margin-top: 15px;
+            letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
@@ -54,6 +76,7 @@
     <div id="ui">
         <div class="label">Synesthesia</div>
         <button id="startBtn">Tocca per iniziare</button>
+        <p id="status">...|||...</p>
     </div>
 
 <script>
@@ -63,14 +86,15 @@
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
+    // Audio Setup
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 4 }
+        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
 
-    synth.volume.value = 8;
+    synth.volume.value = 8; 
 
     const notes = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "C5"];
     
@@ -79,7 +103,10 @@
     let isPlaying = false;
 
     async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'user' }, 
+            audio: false 
+        });
         video.srcObject = stream;
         return new Promise((resolve) => video.onloadedmetadata = resolve);
     }
@@ -92,36 +119,40 @@
     });
 
     function analyze() {
+        // Disegno diretto senza accumulo per eliminare l'effetto ghost
         canvas.width = 64; 
         canvas.height = 64;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
         let motionTotal = 0;
-        let brightnessSum = 0;
+        let rSum = 0, gSum = 0, bSum = 0;
 
         if (prevFrame) {
             for (let i = 0; i < currentFrame.data.length; i += 4) {
-                // Calcola la differenza di movimento (pixel per pixel)
+                // Rilevamento movimento pixel per pixel
                 const diff = Math.abs(currentFrame.data[i] - prevFrame.data[i]);
-                if (diff > 20) motionTotal += diff; // Soglia per ignorare il rumore digitale
-                
-                brightnessSum += currentFrame.data[i];
+                if (diff > 15) motionTotal += diff; 
+
+                rSum += currentFrame.data[i];
+                gSum += currentFrame.data[i+1];
+                bSum += currentFrame.data[i+2];
             }
         }
         
         prevFrame = currentFrame;
 
-        const avgBrightness = brightnessSum / (canvas.width * canvas.height);
-        
-        // SOGLIA MOVIMENTO: Se il movimento totale è superiore a 5000 (valore empirico molto sensibile)
-        if (motionTotal > 5000) {
-            // Mappa la luminosità sulla nota
-            const norm = Math.min(1, avgBrightness / 150); 
-            updateSound(norm, true);
+        const count = canvas.width * canvas.height;
+        const r = rSum / count;
+        const g = gSum / count;
+        const b = bSum / count;
+        const avgBright = (r + g + b) / 3;
+
+        // Soglia di movimento dinamica per attivare/disattivare il suono
+        if (motionTotal > 3000) { 
+            updateSound(r, g, b, avgBright, true);
             isPlaying = true;
         } else {
-            // Se non c'è abbastanza movimento, rilascia le note
             if (isPlaying) {
                 synth.releaseAll();
                 isPlaying = false;
@@ -132,18 +163,24 @@
         requestAnimationFrame(analyze);
     }
 
-    function updateSound(norm, shouldPlay) {
-        const noteIndex = Math.floor(norm * (notes.length - 1));
+    function updateSound(r, g, b, brightness, shouldPlay) {
+        // Normalizzazione per tonalità scure: mappa 0-120 invece di 0-255
+        const noteIndex = Math.floor(mapRange(Math.min(brightness, 120), 0, 120, 0, notes.length - 1));
         const currentNote = notes[noteIndex];
+
+        // Filtro legato al canale rosso (viso/pelle)
+        filter.frequency.rampTo(mapRange(Math.min(r, 150), 0, 150, 400, 2500), 0.3);
 
         if (currentNote !== lastNote && shouldPlay) {
             synth.releaseAll();
+            // Volume di attacco bilanciato
             synth.triggerAttack(currentNote, "+0.05", 0.5);
             lastNote = currentNote;
-            
-            // Apriamo il filtro dinamicamente con il movimento
-            filter.frequency.rampTo(600 + (norm * 2000), 0.3);
         }
+    }
+
+    function mapRange(value, inMin, inMax, outMin, outMax) {
+        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
     }
 </script>
 </body>
