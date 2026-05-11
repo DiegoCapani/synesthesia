@@ -18,7 +18,7 @@
             height: 100vh; 
         }
 
-        /* Il video deve essere tecnicamente visibile ma nascosto all'occhio per permettere al browser di elaborarlo */
+        /* Il video è attivo ma non renderizzato direttamente per usare il canvas */
         #video { 
             position: absolute;
             width: 1px;
@@ -77,7 +77,7 @@
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // Configurazione Audio Originale
+    // Setup Audio (Parametri Originali)
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
     const synth = new Tone.PolySynth(Tone.Synth, {
@@ -88,7 +88,9 @@
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
     let lastNote = "";
-    let ghostIntensity = 0.2; 
+    
+    // Variabile per controllare la forza dell'eco visivo (risonanza)
+    let resonanceAmount = 0.15; 
 
     async function setupCamera() {
         try {
@@ -97,7 +99,6 @@
                 audio: false 
             });
             video.srcObject = stream;
-            // Aspetta che il video sia pronto per davvero
             await new Promise((resolve) => {
                 video.onloadeddata = () => {
                     video.play();
@@ -105,7 +106,7 @@
                 };
             });
         } catch (err) {
-            alert("Errore camera: Assicurati di essere su HTTPS e di aver dato i permessi.");
+            console.error("Accesso camera negato o non disponibile.");
         }
     }
 
@@ -116,7 +117,6 @@
         ui.style.opacity = "0";
         setTimeout(() => { ui.style.display = 'none'; }, 1000);
         
-        // Adatta il canvas alle dimensioni effettive del video
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         
@@ -124,30 +124,31 @@
     });
 
     function render() {
-        // Se per qualche motivo il video si ferma, non disegnare nero
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
             
-            // LOGICA GHOST
+            // --- EFFETTO RISONANZA (ECO VISIVO) ---
+            // Disegniamo un rettangolo nero semitrasparente. 
+            // Più è basso il valore di alpha, più lunga sarà la scia dell'eco.
             ctx.globalCompositeOperation = 'source-over';
-            ctx.fillStyle = `rgba(0, 0, 0, ${ghostIntensity})`;
+            ctx.fillStyle = `rgba(0, 0, 0, ${resonanceAmount})`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
+            // Disegniamo il frame attuale con una certa opacità per fondersi con l'eco
             ctx.globalAlpha = 0.8;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             ctx.globalAlpha = 1.0;
 
-            // Analisi pixel per suono
+            // Analisi per il suono
             analyze();
 
-            // Ritorno graduale alla trasparenza standard
-            if (ghostIntensity > 0.15) ghostIntensity -= 0.005;
+            // Ritorno graduale alla risonanza base se è stata alterata
+            if (resonanceAmount < 0.15) resonanceAmount += 0.005;
         }
-
         requestAnimationFrame(render);
     }
 
     function analyze() {
-        // Analizziamo un quadratino al centro
+        // Analisi di una piccola area centrale
         const frame = ctx.getImageData(canvas.width/2 - 5, canvas.height/2 - 5, 10, 10);
         let r = 0, g = 0, b = 0;
         for (let i = 0; i < frame.data.length; i += 4) {
@@ -170,8 +171,8 @@
             synth.releaseAll();
             synth.triggerAttack(currentNote, "+0.1", 0.4);
             
-            // TRIGGER VISIVO: Quando cambia la nota, l'eco diventa più persistente
-            ghostIntensity = 0.02; 
+            // Quando la nota cambia, aumentiamo temporaneamente la risonanza visiva (scia più lunga)
+            resonanceAmount = 0.05; 
             
             lastNote = currentNote;
         }
