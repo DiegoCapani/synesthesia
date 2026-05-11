@@ -3,26 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Eco-Sinestesia | Stazione 01</title>
+    <title>Synesthesia | Stazione 01</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #00ff00; font-family: monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        #video, #canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; opacity: 0.5; }
-        #ui { z-index: 10; text-align: center; background: rgba(0,0,0,0.7); padding: 20px; border: 1px solid #00ff00; }
-        button { background: transparent; color: #00ff00; border: 1px solid #00ff00; padding: 10px 20px; cursor: pointer; font-family: monospace; font-size: 1.2em; }
-        button:hover { background: #00ff00; color: #000; }
-        .label { margin-bottom: 10px; font-size: 0.8em; letter-spacing: 2px; }
+        body { 
+            margin: 0; 
+            background: #000; 
+            color: #fff; 
+            font-family: 'Helvetica', sans-serif; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+        }
+        #video { 
+            position: absolute; 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            opacity: 0.2; /* Molto soffuso per focus sull'interfaccia */
+            filter: grayscale(100%);
+        }
+        #ui { 
+            z-index: 10; 
+            text-align: center; 
+        }
+        h1 { 
+            font-size: 3rem; 
+            font-weight: 100; 
+            letter-spacing: 12px; 
+            margin-bottom: 40px; 
+            text-transform: uppercase;
+        }
+        button { 
+            background: #fff; 
+            color: #000; 
+            border: none; 
+            padding: 15px 40px; 
+            cursor: pointer; 
+            font-size: 1rem; 
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        button:active { transform: scale(0.95); opacity: 0.8; }
+        #status { 
+            margin-top: 20px; 
+            font-size: 0.7rem; 
+            letter-spacing: 4px; 
+            opacity: 0.5; 
+        }
     </style>
 </head>
 <body>
 
     <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas"></canvas>
+    <canvas id="canvas" style="display:none;"></canvas>
 
     <div id="ui">
-        <div class="label">Synesthesia</div>
-        <button id="startBtn">Inzia analisi</button>
-        <p id="status">Sistema in attesa...</p>
+        <h1>Synesthesia</h1>
+        <button id="startBtn">Tocca per iniziare</button>
+        <p id="status">SISTEMA OFFLINE</p>
     </div>
 
 <script>
@@ -30,42 +73,63 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const startBtn = document.getElementById('startBtn');
-    const status = document.getElementById('status');
+    const statusText = document.getElementById('status');
 
-    // Configurazione Suono New Age (Sintetizzatore Polifonico con Riverbero)
-    const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
-    const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
+    // CATENA AUDIO AVANZATA PER VOLUME ALTO E ZERO SCOPPIETTII
+    const limiter = new Tone.Limiter(-1).toDestination(); // Evita distorsioni
+    const compressor = new Tone.Compressor({
+        threshold: -20,
+        ratio: 4,
+        attack: 0.05,
+        release: 0.1
+    }).connect(limiter);
+
+    const reverb = new Tone.Reverb({ decay: 8, wet: 0.6 }).connect(compressor);
+    const filter = new Tone.Filter(800, "lowpass").connect(reverb);
     
-    // PolySynth per evitare scoppiettii e permettere polifonia fluida
+    // PolySynth con inviluppi molto dolci
     const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "sine" }, // Onda sinusoidale per purezza New Age
-        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 } // Attacco e rilascio lunghi
+        oscillator: { type: "sine" },
+        envelope: { 
+            attack: 1.5,   // Attacco molto lento per eliminare il "pop" iniziale
+            decay: 2, 
+            sustain: 1, 
+            release: 5     // Rilascio lunghissimo per fluidità New Age
+        }
     }).connect(filter);
 
-    // Scale musicali (Pentatonica di Do per armonia garantita)
-    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
+    // Volume generale alzato (Tone.js usa i decibel, +6 o +10 è un aumento sensibile)
+    synth.volume.value = 8; 
+
+    const notes = ["F3", "G3", "A3", "C4", "D4", "F4", "G4", "A4"];
 
     async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-        video.srcObject = stream;
-        return new Promise((resolve) => video.onloadedmetadata = resolve);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user', width: 320, height: 240 }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+            return new Promise((resolve) => video.onloadedmetadata = resolve);
+        } catch (e) {
+            statusText.innerText = "ERRORE CAMERA";
+        }
     }
 
     startBtn.addEventListener('click', async () => {
         await Tone.start();
         await setupCamera();
         startBtn.style.display = 'none';
-        status.innerText = "ANALISI ATTIVA: TRADUZIONE FREQUENZE...";
+        statusText.innerText = "ANALISI CROMATICA ATTIVA";
         analyze();
     });
 
     function analyze() {
-        canvas.width = 64; // Bassa risoluzione per performance e privacy
-        canvas.height = 64;
+        canvas.width = 32;
+        canvas.height = 32;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Leggi i pixel al centro dell'inquadratura (zona viso)
-        const frame = ctx.getImageData(16, 16, 32, 32);
+        const frame = ctx.getImageData(8, 8, 16, 16);
         let r = 0, g = 0, b = 0;
 
         for (let i = 0; i < frame.data.length; i += 4) {
@@ -75,33 +139,37 @@
         }
 
         const count = frame.data.length / 4;
-        r = r / count; g = g / count; b = b / count;
+        r /= count; g /= count; b /= count;
 
         updateSound(r, g, b);
-        requestAnimationFrame(analyze);
+        // Analisi ogni 100ms per evitare sovraccarico e "jitter" sonoro
+        setTimeout(analyze, 100); 
     }
 
     let lastNote = "";
 
     function updateSound(r, g, b) {
-        // Mappa la luminosità totale sulla scelta della nota
         const brightness = (r + g + b) / 3;
         const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
         const currentNote = notes[noteIndex];
 
-        // Mappa il rosso sul filtro (colore caldo = suono più aperto)
-        filter.frequency.rampTo(mapRange(r, 0, 255, 400, 2000), 0.5);
+        // Filtro fluido (rampTo evita scatti udibili)
+        const filterFreq = mapRange(g, 0, 255, 300, 1500);
+        filter.frequency.rampTo(filterFreq, 0.2);
 
-        // Se la nota cambia, attaccala dolcemente per evitare "clic" o scoppiettii
         if (currentNote !== lastNote) {
-            synth.releaseAll();
-            synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.1, 0.5));
+            // Rilascio graduale delle note precedenti invece di un distacco netto
+            synth.releaseAll("+0.1");
+            // Volume della nota basato sulla componente rossa (più dinamica)
+            const velocity = mapRange(r, 0, 255, 0.3, 0.8);
+            synth.triggerAttack(currentNote, "+0.2", velocity);
             lastNote = currentNote;
         }
     }
 
     function mapRange(value, inMin, inMax, outMin, outMax) {
-        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+        let res = (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+        return Math.max(outMin, Math.min(outMax, res)); // Clamping per sicurezza
     }
 </script>
 </body>
