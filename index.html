@@ -6,21 +6,13 @@
     <title>Eco-Sinestesia | Stazione 01</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
-        
-        /* Video nascosto per usare solo il canvas elaborato */
+        body { margin: 0; background: #000; color: #fff; font-family: 'Lexend', sans-serif; overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
         #video { display: none; }
-        
-        #canvas { 
-            position: absolute; width: 100%; height: 100%; object-fit: cover;
-            /* Effetto "Fuori Scala": scomposizione cromatica tramite filtri CSS leggeri */
-            filter: contrast(110%) saturate(120%);
-        }
-        
-        #ui { z-index: 10; text-align: center; background: rgba(0,0,0,0.8); padding: 30px; border: 1px solid #fff; }
-        .label { margin-bottom: 15px; font-size: 1.1em; text-transform: uppercase; letter-spacing: 4px; }
-        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 12px 24px; cursor: pointer; letter-spacing: 2px; transition: 0.3s; }
-        button:hover { background: #fff; color: #000; }
+        #canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        #ui { z-index: 10; text-align: center; background: rgba(0,0,0,0.7); padding: 40px; border: 0.5px solid rgba(255,255,255,0.3); backdrop-filter: blur(10px); }
+        .label { margin-bottom: 10px; font-size: 0.8em; letter-spacing: 6px; text-transform: uppercase; opacity: 0.8; }
+        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 35px; cursor: pointer; letter-spacing: 3px; font-size: 0.9em; transition: all 0.5s ease; }
+        button:hover { background: #fff; color: #000; box-shadow: 0 0 20px rgba(255,255,255,0.4); }
     </style>
 </head>
 <body>
@@ -30,105 +22,110 @@
 
     <div id="ui">
         <div class="label">Eco-Sinestesia</div>
-        <button id="startBtn">INIZIA SCANSIONE</button>
-        <p style="font-size: 0.7em; margin-top: 15px; opacity: 0.6;">Città Visibile 2026</p>
+        <h2 style="font-weight: 200; margin-bottom: 30px; letter-spacing: 2px;">Scomposizione dell'Io</h2>
+        <button id="startBtn">INIZIA L'ESPERIENZA</button>
     </div>
 
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // Configurazione Audio New Age stabile
-    const reverb = new Tone.Reverb({ decay: 6, wet: 0.4 }).toDestination();
-    const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
+    // --- AUDIO DESIGN NEW AGE ---
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.6 }).toDestination();
+    const delay = new Tone.FeedbackDelay("8n", 0.5).connect(reverb);
+    const filter = new Tone.Filter(1200, "lowpass").connect(delay);
+    
+    // Un sintetizzatore morbido e cristallino
     const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "sine" },
-        envelope: { attack: 1.5, release: 4 }
+        oscillator: { type: "fatsine", count: 3, spread: 30 },
+        envelope: { attack: 2, decay: 2, sustain: 0.9, release: 5 }
     }).connect(filter);
-    synth.volume.value = 2;
+    
+    synth.volume.value = -5;
 
-    const notes = ["C4", "D4", "E4", "G4", "A4", "C5"];
+    // Scala Pentatonica di Do Maggiore (Sempre Armonica)
+    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
 
-    async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    async function setup() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
         video.srcObject = stream;
-        return new Promise((resolve) => video.onloadedmetadata = resolve);
+        return new Promise(r => video.onloadedmetadata = r);
     }
 
-    startBtn.addEventListener('click', async () => {
+    document.getElementById('startBtn').addEventListener('click', async () => {
         await Tone.start();
-        await setupCamera();
-        ui.style.display = 'none';
-        analyze();
+        await setup();
+        ui.style.opacity = '0';
+        setTimeout(() => ui.style.display = 'none', 500);
+        loop();
     });
-
-    function analyze() {
-        // Manteniamo la risoluzione di analisi bassa (Low-Impact) [cite: 10, 19]
-        const analysisW = 64;
-        const analysisH = 64;
-        
-        // Adattiamo il canvas alla finestra per l'output visivo
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        // --- RENDER VISIVO (Scomposizione dell'Io) ---
-        ctx.save();
-        
-        // 1. Canale Rosso (Spostato a sinistra - Fuori Scala)
-        ctx.globalCompositeOperation = "screen";
-        ctx.filter = "matrix(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)";
-        ctx.drawImage(video, -15, 0, canvas.width, canvas.height);
-        
-        // 2. Canale Blu (Spostato a destra - Fuori Scala)
-        ctx.filter = "matrix(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0)";
-        ctx.drawImage(video, 15, 0, canvas.width, canvas.height);
-        
-        // 3. Canale Verde (Centrale - Immagine Statica/Base)
-        ctx.filter = "matrix(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)";
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        ctx.restore();
-
-        // --- ANALISI DATI (Tua logica originale) ---
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = analysisW;
-        tempCanvas.height = analysisH;
-        const tCtx = tempCanvas.getContext('2d');
-        tCtx.drawImage(video, 0, 0, analysisW, analysisH);
-        
-        const frame = tCtx.getImageData(16, 16, 32, 32);
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < frame.data.length; i += 4) {
-            r += frame.data[i]; g += frame.data[i + 1]; b += frame.data[i + 2];
-        }
-
-        const count = frame.data.length / 4;
-        updateSound(r/count, g/count, b/count);
-        
-        requestAnimationFrame(analyze);
-    }
 
     let lastNote = "";
 
-    function updateSound(r, g, b) {
-        const brightness = (r + g + b) / 3;
-        const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
-        const currentNote = notes[noteIndex];
+    function loop() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-        filter.frequency.rampTo(mapRange(r, 0, 255, 400, 2500), 0.5);
+        // --- EFFETTO VISIVO: SCOMPOSIZIONE CROMATICA ---
+        ctx.save();
+        
+        // Calcoliamo un offset basato sul tempo per un movimento fluido
+        const time = Date.now() * 0.002;
+        const shift = Math.sin(time) * 15;
 
-        if (currentNote !== lastNote && brightness > 20) {
-            synth.releaseAll();
-            synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.2, 0.6));
-            lastNote = currentNote;
+        ctx.globalCompositeOperation = "screen";
+
+        // Canale Rosso (Spostato)
+        ctx.filter = "matrix(1,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,1,0)";
+        ctx.drawImage(video, shift, 0, canvas.width, canvas.height);
+
+        // Canale Blu (Spostato opposto)
+        ctx.filter = "matrix(0,0,0,0,0, 0,0,0,0,0, 0,0,1,0,0, 0,0,0,1,0)";
+        ctx.drawImage(video, -shift, 0, canvas.width, canvas.height);
+
+        // Canale Verde (Stabile al centro)
+        ctx.filter = "matrix(0,0,0,0,0, 0,1,0,0,0, 0,0,0,0,0, 0,0,0,1,0)";
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        ctx.restore();
+
+        // --- ANALISI PER IL SUONO ---
+        // Analizziamo il centro per estrarre il "cuore" del colore
+        const dataCanvas = document.createElement('canvas');
+        dataCanvas.width = 40; dataCanvas.height = 40;
+        const dCtx = dataCanvas.getContext('2d');
+        dCtx.drawImage(video, 10, 10, 20, 20);
+        const pixels = dCtx.getImageData(0, 0, 20, 20).data;
+
+        let r = 0, g = 0, b = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+            r += pixels[i]; g += pixels[i+1]; b += pixels[i+2];
         }
+        const avg = pixels.length / 4;
+        r /= avg; g /= avg; b /= avg;
+
+        updateNewAgeSound(r, g, b);
+        
+        requestAnimationFrame(loop);
     }
 
-    function mapRange(value, inMin, inMax, outMin, outMax) {
-        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+    function updateNewAgeSound(r, g, b) {
+        const brightness = (r + g + b) / 3;
+        
+        // Selezione nota armonica
+        const nIdx = Math.floor((brightness / 256) * notes.length);
+        const currentNote = notes[nIdx];
+
+        // Il filtro diventa più "etereo" con la luce
+        filter.frequency.rampTo(r * 5 + 400, 0.5);
+
+        if (currentNote !== lastNote && brightness > 40) {
+            // Suono vellutato con attacco lento
+            synth.triggerAttackRelease(currentNote, "2n", undefined, g/512 + 0.1);
+            lastNote = currentNote;
+        }
     }
 </script>
 </body>
