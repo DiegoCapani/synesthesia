@@ -13,13 +13,18 @@
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
             overflow: hidden; 
             display: flex; 
-            flex-direction: column; 
             align-items: center; 
             justify-content: center; 
             height: 100vh; 
         }
 
-        #video { display: none; } /* Video nascosto per usare solo il canvas artistico */
+        /* Il video deve essere tecnicamente visibile ma nascosto all'occhio per permettere al browser di elaborarlo */
+        #video { 
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
 
         #canvas { 
             position: absolute; 
@@ -75,31 +80,33 @@
     // Configurazione Audio Originale
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
-    
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
         envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
-
     synth.volume.value = 0; 
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
     let lastNote = "";
-    let ghostIntensity = 0.2; // Intensità base dell'eco visiva
+    let ghostIntensity = 0.2; 
 
     async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'user' }, 
-            audio: false 
-        });
-        video.srcObject = stream;
-        return new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                resolve();
-            };
-        });
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user' }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+            // Aspetta che il video sia pronto per davvero
+            await new Promise((resolve) => {
+                video.onloadeddata = () => {
+                    video.play();
+                    resolve();
+                };
+            });
+        } catch (err) {
+            alert("Errore camera: Assicurati di essere su HTTPS e di aver dato i permessi.");
+        }
     }
 
     startBtn.addEventListener('click', async () => {
@@ -109,66 +116,65 @@
         ui.style.opacity = "0";
         setTimeout(() => { ui.style.display = 'none'; }, 1000);
         
+        // Adatta il canvas alle dimensioni effettive del video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
         render();
     });
 
     function render() {
-        // EFFETTO GHOST: Disegna un rettangolo semitrasparente invece di pulire il frame
-        ctx.fillStyle = `rgba(0, 0, 0, ${ghostIntensity})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Disegna il video corrente in semitrasparenza sopra i frame precedenti
-        ctx.globalAlpha = 0.8;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        ctx.globalAlpha = 1.0;
+        // Se per qualche motivo il video si ferma, non disegnare nero
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            
+            // LOGICA GHOST
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = `rgba(0, 0, 0, ${ghostIntensity})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.globalAlpha = 0.8;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0;
 
-        // Recupera i dati per l'analisi sonora
-        analyzePixels();
+            // Analisi pixel per suono
+            analyze();
 
-        // Riporta lentamente l'intensità del ghost al valore base
-        if (ghostIntensity > 0.15) ghostIntensity -= 0.01;
+            // Ritorno graduale alla trasparenza standard
+            if (ghostIntensity > 0.15) ghostIntensity -= 0.005;
+        }
 
         requestAnimationFrame(render);
     }
 
-    function analyzePixels() {
-        // Usiamo un piccolo estratto dal centro del canvas per l'analisi
-        const size = 10;
-        const x = Math.floor(canvas.width / 2 - size / 2);
-        const y = Math.floor(canvas.height / 2 - size / 2);
-        const frame = ctx.getImageData(x, y, size, size);
-        
+    function analyze() {
+        // Analizziamo un quadratino al centro
+        const frame = ctx.getImageData(canvas.width/2 - 5, canvas.height/2 - 5, 10, 10);
         let r = 0, g = 0, b = 0;
         for (let i = 0; i < frame.data.length; i += 4) {
             r += frame.data[i];
             g += frame.data[i + 1];
             b += frame.data[i + 2];
         }
-
         const count = frame.data.length / 4;
         updateSound(r / count, g / count, b / count);
     }
 
     function updateSound(r, g, b) {
         const brightness = (r + g + b) / 3;
-        const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
+        const noteIndex = Math.floor((brightness / 256) * notes.length);
         const currentNote = notes[noteIndex];
 
-        filter.frequency.rampTo(mapRange(r, 0, 255, 400, 2000), 0.5);
+        filter.frequency.rampTo(400 + (r * 6), 0.5);
 
-        if (currentNote !== lastNote) {
+        if (currentNote !== lastNote && currentNote !== undefined) {
             synth.releaseAll();
-            synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.1, 0.5));
+            synth.triggerAttack(currentNote, "+0.1", 0.4);
             
-            // Reazione visiva al cambio nota: aumenta l'effetto eco/ghost
-            ghostIntensity = 0.05; 
+            // TRIGGER VISIVO: Quando cambia la nota, l'eco diventa più persistente
+            ghostIntensity = 0.02; 
             
             lastNote = currentNote;
         }
-    }
-
-    function mapRange(value, inMin, inMax, outMin, outMax) {
-        return Math.min(outMax, Math.max(outMin, (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin));
     }
 </script>
 </body>
