@@ -8,12 +8,10 @@
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; height: 100vh; }
         #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: additive; }
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1.5s; }
-        .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 50px; background: rgba(0,0,0,0.9); }
-        h1 { font-weight: 100; letter-spacing: 5px; margin-bottom: 30px; }
-        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 40px; cursor: pointer; letter-spacing: 3px; transition: 0.4s; }
-        button:hover { background: #fff; color: #000; }
+        #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: screen; }
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
+        .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 40px; }
+        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 40px; cursor: pointer; letter-spacing: 3px; }
     </style>
 </head>
 <body>
@@ -23,9 +21,8 @@
 
     <div id="ui">
         <div class="container">
-            <div style="letter-spacing: 4px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.5;">CITTÀ VISIBILE 2026</div>
-            <h1>ECO-SINESTESIA</h1>
-            <button id="startBtn">ATTIVA SCANNER</button>
+            <h1 style="font-weight: 100; letter-spacing: 5px;">STAZIONE 01</h1>
+            <button id="startBtn">ATTIVA SINESTESIA</button>
         </div>
     </div>
 
@@ -35,94 +32,79 @@
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- ENGINE MELODICO EVOLUTO ---
-    const mainReverb = new Tone.Reverb({ decay: 12, wet: 0.6 }).toDestination();
-    const mainDelay = new Tone.FeedbackDelay("4n", 0.4).connect(mainReverb);
-    
-    // Sintetizzatore per la melodia (Lead cristallino)
-    const leadSynth = new Tone.PolySynth(Tone.Synth, {
+    // AUDIO SETUP
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.6 }).toDestination();
+    const delay = new Tone.FeedbackDelay("4n", 0.3).connect(reverb);
+    const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 1, decay: 0.5, sustain: 0.6, release: 4 }
-    }).connect(mainDelay);
-    
-    // Sintetizzatore per l'armonia di fondo (Drone/Pad)
-    const padSynth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "fatsawtooth", count: 3, spread: 20 },
-        envelope: { attack: 4, release: 8 }
-    }).connect(mainReverb);
+        envelope: { attack: 1.5, release: 4 }
+    }).connect(delay);
+    synth.volume.value = -8;
 
-    leadSynth.volume.value = -12;
-    padSynth.volume.value = -25;
-
-    // Scala Pentatonica di Do Maggiore (Celestiale)
-    const scale = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5", "G5"];
-    let currentBrightness = 0;
-    let targetFrequency = 400;
+    const scale = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
+    let avgBright = 0;
 
     async function start() {
         await Tone.start();
+        await Tone.context.resume(); // CRUCIALE per il suono
+        
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
             video.onloadedmetadata = () => {
                 video.play();
                 ui.style.opacity = '0';
-                setTimeout(() => ui.style.display = 'none', 1500);
+                setTimeout(() => ui.style.display = 'none', 1000);
                 
-                // Avviamo il loop melodico (Arpeggiatore)
-                Tone.Transport.scheduleRepeat((time) => {
-                    playMelody(time);
-                }, "4n");
+                // Arpeggiatore melodico
+                const loop = new Tone.Loop(time => {
+                    if (avgBright > 40) {
+                        const note = scale[Math.floor(Tone.Math.mapLinear(avgBright, 40, 200, 0, scale.length - 1))];
+                        synth.triggerAttackRelease(note, "2n", time, 0.4);
+                    }
+                }, "4n").start(0);
+                
                 Tone.Transport.start();
-                
                 render();
             };
-        } catch (e) { alert("Attivare la camera."); }
-    }
-
-    function playMelody(time) {
-        // La melodia dipende dalla luminosità catturata nel render()
-        const noteIndex = Math.floor(Tone.Math.mapLinear(currentBrightness, 0, 255, 0, scale.length - 1));
-        const note = scale[noteIndex];
-        
-        // Suoniamo una nota solo se c'è attività luminosa
-        if (currentBrightness > 40) {
-            leadSynth.triggerAttackRelease(note, "2n", time, 0.4);
-            
-            // Ogni tanto aggiungiamo un'armonia casuale per rendere il tutto più "musicale"
-            if (Math.random() > 0.7) {
-                padSynth.triggerAttackRelease(scale[0], "1n", time, 0.2);
-            }
-        }
+        } catch (e) { alert("Attiva fotocamera"); }
     }
 
     function render() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Analisi dati (veloce e leggera)
-        const tCanvas = document.createElement('canvas');
-        tCanvas.width = 20; tCanvas.height = 20;
-        const tCtx = tCanvas.getContext('2d');
-        tCtx.drawImage(video, 0, 0, 20, 20);
-        const data = tCtx.getImageData(0, 0, 20, 20).data;
+        // Analisi Pixel (Griglia 20x20)
+        const size = 20;
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = size; tempCanvas.height = size;
+        const tCtx = tempCanvas.getContext('2d');
+        tCtx.drawImage(video, 0, 0, size, size);
+        const pixels = tCtx.getImageData(0, 0, size, size).data;
 
-        let r = 0, g = 0, b = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            r += data[i]; g += data[i+1]; b += data[i+2];
-        }
-        currentBrightness = (r + g + b) / (data.length / 4 * 3);
-
-        // --- EFFETTO VISIVO (AURA LUMINOSA) ---
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        for (let i = 0; i < 30; i++) {
-            const size = Math.random() * (currentBrightness / 2);
-            ctx.fillStyle = `rgba(${r/(data.length/4)}, ${g/(data.length/4)}, ${b/(data.length/4)}, 0.3)`;
-            ctx.beginPath();
-            ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, size, 0, Math.PI * 2);
-            ctx.fill();
-        }
+        
+        let totalBrightness = 0;
+        const cellW = canvas.width / size;
+        const cellH = canvas.height / size;
 
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const i = (y * size + x) * 4;
+                const r = pixels[i], g = pixels[i+1], b = pixels[i+2];
+                const bright = (r + g + b) / 3;
+                totalBrightness += bright;
+
+                if (bright > 130) { // Disegna sfere solo sulle zone luminose (viso)
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.4)`;
+                    ctx.beginPath();
+                    // Coordinate mappate correttamente sulla griglia del volto
+                    ctx.arc(x * cellW + cellW/2, y * cellH + cellH/2, bright/8, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+        avgBright = totalBrightness / (size * size);
         requestAnimationFrame(render);
     }
 
