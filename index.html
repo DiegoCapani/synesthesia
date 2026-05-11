@@ -74,9 +74,9 @@
     <canvas id="canvas"></canvas>
 
     <div id="ui">
-        <div class="label">STAZIONE 01: ANALISI CROMATICA</div>
-        <button id="startBtn">INIZIA ANALISI</button>
-        <p id="status">SISTEMA IN ATTESA...</p>
+        <div class="label">Synesthesia</div>
+        <button id="startBtn">Tocca per iniziare</button>
+        <p id="status">...|||...</p>
     </div>
 
 <script>
@@ -95,6 +95,9 @@
         oscillator: { type: "sine" },
         envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
+
+    // VOLUME
+    synth.volume.value = 6; // 0 standrad - +6 decibel (circa il doppio del volume percepito)
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
 
