@@ -10,7 +10,7 @@
             margin: 0; 
             background: #000; 
             color: #fff; 
-            font-family: 'Helvetica', sans-serif; 
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
             overflow: hidden; 
             display: flex; 
             flex-direction: column; 
@@ -18,15 +18,17 @@
             justify-content: center; 
             height: 100vh; 
         }
-        #video { 
+        /* Video nascosto, usiamo il canvas per l'eco */
+        #video { display: none; }
+        
+        #canvas { 
             position: absolute; 
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            opacity: 0.15; 
-            filter: grayscale(100%);
-            z-index: 1;
+            z-index: 1; /* Sotto l'UI all'inizio */
         }
+
         #ui { 
             z-index: 10; 
             text-align: center; 
@@ -49,7 +51,6 @@
             letter-spacing: 2px;
             text-transform: uppercase;
         }
-        canvas { display: none; }
     </style>
 </head>
 <body>
@@ -65,23 +66,40 @@
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // RIPRISTINO SUONO PRIMA VERSIONE + VOLUME ALTO
-    const reverb = new Tone.Reverb({ decay: 6, wet: 0.5 }).toDestination();
+    // --- CONFIGURAZIONE AUDIO NEW AGE AVANZATA ---
     
-    // PolySynth per polifonia fluida
-    const synth = new Tone.PolySynth(Tone.Synth, {
+    // Riverbero molto lungo e spaziale
+    const reverb = new Tone.Reverb({ decay: 12, wet: 0.7 }).toDestination();
+    // Filtro per ammorbidire le frequenze alte
+    const filter = new Tone.Filter(1200, "lowpass").connect(reverb);
+    
+    // 1. Sintetizzatore Principale (Tappeto sonoro morbido)
+    const synthBase = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "triangle" }, // Onda più dolce della sine
+        envelope: { attack: 2, decay: 2, sustain: 0.9, release: 5 }
+    }).connect(filter);
+    synthBase.volume.value = -6; // Abbassiamo per mixare
+
+    // 2. Sintetizzatore Cristallino (Armoniche FM tipiche New Age)
+    const synthCrystal = new Tone.PolySynth(Tone.FMSynth, {
+        harmonicity: 3.01,
+        modulationIndex: 4,
         oscillator: { type: "sine" },
-        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
-    }).connect(reverb);
+        envelope: { attack: 1, decay: 0.3, sustain: 0.1, release: 4 },
+        modulation: { type: "square" },
+        modulationEnvelope: { attack: 0.5, decay: 0.2, sustain: 1, release: 2 }
+    }).connect(filter);
+    synthCrystal.volume.value = -12; // Suono di contorno cristallino
 
-    // Incremento volume
-    synth.volume.value = 10; 
+    // Master Volume alzato
+    Tone.Destination.volume.value = 8;
 
-    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
+    // Scala Pentatonica Lidia (molto sognante/New Age)
+    const notes = ["F3", "G3", "A3", "B3", "C4", "E4", "F4", "G4", "A4", "B4", "C5", "E5"];
 
     async function setupCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -100,15 +118,34 @@
         ui.style.opacity = "0";
         setTimeout(() => { ui.style.display = 'none'; }, 1000);
         
-        analyze();
+        // Impostiamo le dimensioni del canvas uguali al video per l'eco
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        analyzeAndDraw();
     });
 
-    function analyze() {
-        canvas.width = 32;
-        canvas.height = 32;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    function analyzeAndDraw() {
+        // --- EFFETTO ECO VISIVO (Persistenza) ---
+        // Invece di cancellare il frame, disegniamo un rettangolo nero semi-trasparente
+        // Sopra il frame precedente, creando una scia.
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; // Più basso è il valore (0.15), più lunga è l'eco
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        const frame = ctx.getImageData(8, 8, 16, 16);
+        // Disegniamo il video attuale sopra con un po' di trasparenza
+        ctx.globalAlpha = 0.8; 
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1.0; // Resettiamo
+
+        // --- ANALISI CROMATICA ---
+        // Usiamo un canvas temporaneo piccolissimo per l'analisi per performance
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        tempCanvas.width = 16;
+        tempCanvas.height = 16;
+        tempCtx.drawImage(video, 0, 0, 16, 16);
+        
+        const frame = tempCtx.getImageData(4, 4, 8, 8);
         let r = 0, g = 0, b = 0;
 
         for (let i = 0; i < frame.data.length; i += 4) {
@@ -121,22 +158,34 @@
         r /= count; g /= count; b /= count;
 
         updateSound(r, g, b);
-        requestAnimationFrame(analyze);
+        requestAnimationFrame(analyzeAndDraw);
     }
 
     let lastNote = "";
 
     function updateSound(r, g, b) {
         const brightness = (r + g + b) / 3;
+        const saturation = Math.max(r, g, b) - Math.min(r, g, b);
+        
         const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
         const currentNote = notes[noteIndex];
 
         if (currentNote !== lastNote) {
-            // Piccolo fade out per evitare scoppiettii nel cambio nota
-            synth.releaseAll(); 
-            // Volume basato sulla luminosità (velocity)
-            const vel = mapRange(g, 0, 255, 0.2, 0.6);
-            synth.triggerAttack(currentNote, Tone.now(), vel);
+            // Rilascio dolce
+            synthBase.releaseAll("+0.5");
+            synthCrystal.releaseAll("+0.1");
+
+            // Velocity basata sulla luminosità
+            const vel = mapRange(g, 0, 255, 0.3, 0.7);
+            
+            // Suoniamo entrambi i synth per profondità New Age
+            synthBase.triggerAttack(currentNote, Tone.now(), vel);
+            
+            // Il synth cristallino suona solo se i colori sono saturi
+            if (saturation > 30) {
+                synthCrystal.triggerAttack(currentNote, "+0.2", vel * 0.5);
+            }
+            
             lastNote = currentNote;
         }
     }
