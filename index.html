@@ -7,11 +7,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
-        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; filter: brightness(1.1) contrast(1.1); }
-        #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: additive; }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.7; }
+        #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: screen; }
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
-        .container { text-align: center; border: 1px solid rgba(255,255,255,0.3); padding: 40px; background: rgba(0,0,0,0.8); }
-        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 35px; cursor: pointer; letter-spacing: 3px; }
+        .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 40px; }
+        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 35px; cursor: pointer; letter-spacing: 3px; text-transform: uppercase; }
     </style>
 </head>
 <body>
@@ -21,8 +21,8 @@
 
     <div id="ui">
         <div class="container">
-            <h1 style="font-weight: 100; letter-spacing: 2px;">ECO-SINESTESIA</h1>
-            <button id="startBtn">ATTIVA SCANSIONE</button>
+            <h1 style="font-weight: 100; letter-spacing: 3px;">ECO-SINESTESIA</h1>
+            <button id="startBtn">INIZIA SCANSIONE</button>
         </div>
     </div>
 
@@ -32,25 +32,24 @@
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- AUDIO MEDITATIVO ---
-    const reverb = new Tone.Reverb({ decay: 12, wet: 0.6 }).toDestination();
-    const filter = new Tone.Filter(700, "lowpass").connect(reverb);
+    // --- ENGINE AUDIO ---
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).toDestination();
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 4, decay: 1, sustain: 1, release: 5 }
-    }).connect(filter);
+        envelope: { attack: 2, decay: 1, sustain: 1, release: 3 }
+    }).connect(reverb);
     
-    // Master Volume con Gate
-    const masterVol = new Tone.Volume(-Infinity).toDestination();
-    synth.connect(masterVol);
+    // Volume con gestione dinamica (parte silenziato)
+    const masterOut = new Tone.Volume(-Infinity).toDestination();
+    synth.connect(masterOut);
 
-    const notes = ["C4", "E4", "G4", "B4", "C5", "D5"];
+    const notes = ["C4", "E4", "G4", "B4", "C5"];
     let prevData = null;
     let lastNote = "";
 
     async function start() {
+        await Tone.start();
         try {
-            await Tone.start();
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
             video.onloadedmetadata = () => {
@@ -59,7 +58,7 @@
                 setTimeout(() => ui.style.display = 'none', 1000);
                 render();
             };
-        } catch (e) { alert("Camera non trovata."); }
+        } catch (e) { alert("Camera non disponibile"); }
     }
 
     function render() {
@@ -71,60 +70,51 @@
         tCanvas.width = 40; tCanvas.height = 40;
         const tCtx = tCanvas.getContext('2d');
         tCtx.drawImage(video, 0, 0, 40, 40);
-        const frame = tCtx.getImageData(0, 0, 40, 40);
-        const data = frame.data;
+        const data = tCtx.getImageData(0, 0, 40, 40).data;
 
-        let totalR = 0, totalG = 0, totalB = 0;
-        let changeCount = 0;
+        let movement = 0;
+        let brightness = 0;
 
         if (prevData) {
             for (let i = 0; i < data.length; i += 4) {
-                // Calcoliamo la differenza tra pixel
-                const diff = Math.abs(data[i] - prevData[i]) + 
-                             Math.abs(data[i+1] - prevData[i+1]) + 
-                             Math.abs(data[i+2] - prevData[i+2]);
-                
-                // SOGLIA RUMORE: se la variazione è minore di 40, la ignoriamo (flicker della luce)
-                if (diff > 40) {
-                    changeCount += diff;
-                }
-                totalR += data[i]; totalG += data[i+1]; totalB += data[i+2];
+                // Differenza netta per pixel
+                const d = Math.abs(data[i] - prevData[i]);
+                if (d > 50) movement += d; // Ignora micro-rumore della camera
+                brightness += (data[i] + data[i+1] + data[i+2]) / 3;
             }
         }
         prevData = new Uint8ClampedArray(data);
+        const avgB = brightness / (40 * 40);
 
-        // Disegno particelle (solo se c'è luce sufficiente)
-        for (let y = 0; y < 40; y += 2) {
-            for (let x = 0; x < 40; x += 2) {
-                const i = (y * 40 + x) * 4;
-                if (data[i+1] > 160) { // verde come riferimento luminosità
-                    ctx.fillStyle = `rgba(${data[i]}, ${data[i+1]}, ${data[i+2]}, 0.4)`;
-                    ctx.beginPath();
-                    ctx.arc((x/40)*canvas.width, (y/40)*canvas.height, data[i]/45, 0, Math.PI*2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        // --- GESTIONE LOGICA SILENZIO ---
-        // changeCount è la somma delle variazioni reali. 
-        // Se è molto bassa (solo rumore di fondo), silenziamo.
-        if (changeCount < 25000) { 
-            masterVol.volume.rampTo(-Infinity, 1.5); // Dissolvenza dolce al silenzio
+        // --- LOGICA DI SILENZIO CORRETTA ---
+        // Se il movimento totale è sotto una soglia minima, forziamo il silenzio
+        if (movement < 15000) { 
+            masterOut.volume.rampTo(-Infinity, 0.8);
+            synth.releaseAll(); // Spegne forzatamente le note appese
+            lastNote = "";
         } else {
-            masterVol.volume.rampTo(-8, 0.5); // Riattiva il suono
+            // Se c'è movimento, il volume sale e le note suonano
+            masterOut.volume.rampTo(-10, 0.3);
             
-            const avgB = (totalR + totalG + totalB) / (40*40*3);
             const nIdx = Math.floor((avgB / 255) * notes.length);
-            const note = notes[nIdx % notes.length];
+            const currentNote = notes[nIdx % notes.length];
 
-            if (note !== lastNote && avgB > 40) {
-                synth.releaseAll();
-                synth.triggerAttack(note, "+0.1", 0.3);
-                lastNote = note;
+            if (currentNote !== lastNote && avgB > 50) {
+                synth.triggerAttackRelease(currentNote, "2n", undefined, 0.4);
+                lastNote = currentNote;
             }
         }
-        
+
+        // Effetto visivo particelle
+        for (let i = 0; i < 40; i += 2) {
+            if (data[i*4] > 180) {
+                ctx.fillStyle = "rgba(255,255,255,0.3)";
+                ctx.beginPath();
+                ctx.arc(Math.random()*canvas.width, Math.random()*canvas.height, 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
         requestAnimationFrame(render);
     }
 
