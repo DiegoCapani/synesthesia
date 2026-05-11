@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Eco-Sinestesia | Stazione 01 v16</title>
+    <title>Eco-Sinestesia | Stazione 01 v17</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
-        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.5; filter: brightness(1.1) contrast(1.2); }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.5; }
         #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: screen; }
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
         .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 50px; background: rgba(0,0,0,0.9); }
-        button { background: #fff; color: #000; border: none; padding: 20px 50px; cursor: pointer; letter-spacing: 3px; font-weight: bold; text-transform: uppercase; border-radius: 2px; }
-        .version-tag { margin-top: 25px; font-size: 0.7em; letter-spacing: 4px; opacity: 0.5; text-transform: uppercase; }
+        button { background: #fff; color: #000; border: none; padding: 20px 50px; cursor: pointer; letter-spacing: 3px; font-weight: bold; text-transform: uppercase; }
+        .version-tag { margin-top: 25px; font-size: 0.7em; letter-spacing: 4px; opacity: 0.5; }
     </style>
 </head>
 <body>
@@ -24,32 +24,30 @@
         <div class="container">
             <div style="letter-spacing: 4px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.6;">CITTÀ VISIBILE 2026</div>
             <h1 style="font-weight: 100; letter-spacing: 5px;">ECO-SINESTESIA</h1>
-            <button id="startBtn">INIZIA ESPERIENZA</button>
-            <div class="version-tag">STAZIONE 01 | v16</div>
+            <button id="startBtn">ATTIVA AUDIO E VIDEO</button>
+            <div class="version-tag">STAZIONE 01 | v17</div>
         </div>
     </div>
 
 <script>
-    // Configurazione audio per stabilità estrema
-    Tone.context.latencyHint = "playback"; // Ottimizza per la fluidità, non per la latenza zero
-    
+    // Ottimizzazione latenza per evitare scoppiettii di buffer
+    Tone.context.latencyHint = "playback";
+
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- ENGINE AUDIO v16 (Clean New Age) ---
-    const compressor = new Tone.Compressor(-20, 3).toDestination();
-    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).connect(compressor);
+    // --- ENGINE AUDIO v17 (v12 Improved) ---
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).toDestination();
     
-    // Synth basato sulla v13 ma con voci limitate per pulizia buffer
+    // Synth sinusoidale ma "pieno" per evitare artefatti
     const synth = new Tone.PolySynth(Tone.Synth, {
-        maxPolyphony: 4,
         oscillator: { type: "sine" }, 
-        envelope: { attack: 1.2, decay: 0.8, sustain: 1, release: 4 }
+        envelope: { attack: 0.4, decay: 0.2, sustain: 1, release: 4 }
     }).connect(reverb);
     
-    const masterGain = new Tone.Gain(0).connect(compressor);
+    const masterGain = new Tone.Gain(0).toDestination();
     synth.connect(masterGain);
 
     const scale = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "B4", "C5"];
@@ -58,6 +56,8 @@
 
     async function start() {
         await Tone.start();
+        Tone.context.resume();
+        
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
@@ -67,7 +67,7 @@
                 setTimeout(() => ui.style.display = 'none', 1000);
                 render();
             };
-        } catch (e) { alert("Attiva la camera."); }
+        } catch (e) { alert("Camera non trovata."); }
     }
 
     function render() {
@@ -75,7 +75,7 @@
         canvas.height = window.innerHeight;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const grid = 32; 
+        const grid = 30; 
         const tCanvas = document.createElement('canvas');
         tCanvas.width = grid; tCanvas.height = grid;
         const tCtx = tCanvas.getContext('2d');
@@ -93,12 +93,12 @@
 
                 if (prevData) totalMove += Math.abs(r - prevData[i]);
 
-                if (bright > 155) {
+                if (bright > 150) {
                     activeX += x; activeCount++;
-                    if ((x + y) % 2 === 0) { // Estetica v13
+                    if ((x + y) % 2 === 0) {
                         ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
                         ctx.beginPath();
-                        ctx.arc((x/grid)*canvas.width, (y/grid)*canvas.height, bright/28, 0, Math.PI*2);
+                        ctx.arc((x/grid)*canvas.width, (y/grid)*canvas.height, bright/25, 0, Math.PI*2);
                         ctx.fill();
                     }
                 }
@@ -106,12 +106,12 @@
         }
         prevData = new Uint8ClampedArray(data);
 
-        // --- LOGICA AUDIO v16 ---
+        // --- LOGICA REATTIVA v17 ---
         const now = Tone.now();
 
-        if (totalMove > 4500) { 
-            // Risalita volume dolce
-            masterGain.gain.setTargetAtTime(1.2, now, 0.3); 
+        if (totalMove > 3000) { 
+            // Risalita volume fluida (addio scatti)
+            masterGain.gain.setTargetAtTime(1, now, 0.1); 
             
             if (activeCount > 0) {
                 const centerX = activeX / activeCount;
@@ -119,18 +119,14 @@
                 const currentNote = scale[Tone.Math.clamp(noteIdx, 0, scale.length - 1)];
 
                 if (currentNote !== lastNote) {
-                    // TriggerAttackRelease impedisce note "appese"
-                    synth.triggerAttackRelease(currentNote, "1n", now, 0.5);
+                    synth.triggerAttackRelease(currentNote, "1n", now, 0.4);
                     lastNote = currentNote;
                 }
             }
         } else {
-            // Silenziamento progressivo
-            masterGain.gain.setTargetAtTime(0, now, 0.6);
-            if (lastNote !== "") {
-                synth.releaseAll();
-                lastNote = "";
-            }
+            // Dissolvenza morbida al silenzio
+            masterGain.gain.setTargetAtTime(0, now, 0.5);
+            lastNote = "";
         }
 
         requestAnimationFrame(render);
