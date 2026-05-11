@@ -18,55 +18,32 @@
             justify-content: center; 
             height: 100vh; 
         }
-        
         #video, #canvas { 
             position: absolute; 
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            opacity: 0.6; /* Aumentata leggermente per vedere meglio il volto */
+            opacity: 0.5; 
         }
-        
         #ui { 
             z-index: 10; 
             text-align: center; 
             background: rgba(0,0,0,0.5); 
             padding: 30px; 
             border: 1px solid #ffffff; 
-            transition: opacity 0.5s ease;
         }
-        
         button { 
             background: transparent; 
             color: #ffffff; 
             border: 1px solid #ffffff; 
             padding: 12px 24px; 
             cursor: pointer; 
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+            font-family: inherit; 
             font-size: 0.8em; 
             letter-spacing: 2px;
             text-transform: uppercase;
-            transition: all 0.3s ease;
         }
-        
-        button:hover { 
-            background: #ffffff; 
-            color: #000; 
-        }
-        
-        .label { 
-            margin-bottom: 15px; 
-            font-size: 1em; 
-            text-transform: uppercase;
-            letter-spacing: 5px; 
-            opacity: 0.8;
-        }
-
-        #status {
-            font-size: 0.7em;
-            margin-top: 15px;
-            letter-spacing: 1px;
-        }
+        .label { margin-bottom: 15px; font-size: 1em; text-transform: uppercase; letter-spacing: 5px; }
     </style>
 </head>
 <body>
@@ -77,7 +54,6 @@
     <div id="ui">
         <div class="label">Synesthesia</div>
         <button id="startBtn">Tocca per iniziare</button>
-        <p id="status">...|||...</p>
     </div>
 
 <script>
@@ -87,25 +63,19 @@
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // Setup Audio
     const reverb = new Tone.Reverb({ decay: 5, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
-    
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 1.2, decay: 1, sustain: 0.8, release: 4 }
+        envelope: { attack: 0.8, decay: 1, sustain: 0.8, release: 3 }
     }).connect(filter);
 
-    synth.volume.value = 5; 
+    synth.volume.value = 8; // Volume alzato ulteriormente
 
-    // Scala Pentatonica estesa per maggiore varietà
-    const notes = ["C3", "D3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4", "C5"];
+    const notes = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "C5", "E5"];
 
     async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'user' }, 
-            audio: false 
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
         video.srcObject = stream;
         return new Promise((resolve) => video.onloadedmetadata = resolve);
     }
@@ -117,6 +87,10 @@
         analyze();
     });
 
+    // Variabili per la normalizzazione dinamica
+    let minObserved = 255;
+    let maxObserved = 0;
+
     function analyze() {
         canvas.width = 64; 
         canvas.height = 64;
@@ -124,44 +98,55 @@
         
         const frame = ctx.getImageData(16, 16, 32, 32);
         let r = 0, g = 0, b = 0;
-        let maxVal = 0;
 
         for (let i = 0; i < frame.data.length; i += 4) {
             r += frame.data[i];
             g += frame.data[i + 1];
             b += frame.data[i + 2];
-            // Trova il pixel più luminoso per la normalizzazione
-            let bright = (frame.data[i] + frame.data[i+1] + frame.data[i+2]) / 3;
-            if(bright > maxVal) maxVal = bright;
         }
 
         const count = frame.data.length / 4;
         r /= count; g /= count; b /= count;
-
-        // AUTO-GAIN: Se l'ambiente è scuro, amplifica i valori
-        // Questo permette di sentire variazioni anche su abiti neri o pelle in ombra
-        let avgBright = (r + g + b) / 3;
-        let boost = avgBright < 40 ? (40 / (avgBright + 1)) : 1;
         
-        updateSound(r * boost, g * boost, b * boost, avgBright * boost);
+        let currentBrightness = (r + g + b) / 3;
+
+        // --- SISTEMA DI AUTOCALIBRAZIONE ---
+        // Inseguiamo il minimo e il massimo valore di luce visti finora
+        // (con un lento ritorno per adattarsi ai cambi di luce)
+        if (currentBrightness < minObserved) minObserved = currentBrightness;
+        if (currentBrightness > maxObserved) maxObserved = currentBrightness;
+        
+        // Escursione minima per evitare rumore di fondo
+        let range = maxObserved - minObserved;
+        if (range < 20) range = 20; 
+
+        // Normalizziamo il valore: dove si colloca il pixel corrente tra il buio e la luce della stanza?
+        let normalizedOutput = (currentBrightness - minObserved) / range;
+        normalizedOutput = Math.max(0, Math.min(1, normalizedOutput));
+
+        updateSound(normalizedOutput, r, g);
+
+        // Lenta deriva per non rimanere bloccati su picchi di luce passati
+        minObserved += 0.1;
+        maxObserved -= 0.1;
+
         requestAnimationFrame(analyze);
     }
 
     let lastNote = "";
 
-    function updateSound(r, g, b, brightness) {
-        // Mappatura più sensibile: anche piccoli cambiamenti attivano note diverse
-        const noteIndex = Math.floor(mapRange(Math.min(brightness, 255), 0, 255, 0, notes.length - 1));
+    function updateSound(norm, r, g) {
+        // Usa il valore normalizzato (0-1) per scegliere la nota
+        const noteIndex = Math.floor(norm * (notes.length - 1));
         const currentNote = notes[noteIndex];
 
-        // Il filtro reagisce al calore del colore (Rosso/Pelle)
-        filter.frequency.rampTo(mapRange(Math.min(r, 255), 0, 255, 300, 3500), 0.4);
+        // Il filtro rimane sensibile al colore assoluto (calore della pelle/rosso)
+        filter.frequency.rampTo(mapRange(r, 0, 150, 400, 3000), 0.3);
 
         if (currentNote !== lastNote) {
             synth.releaseAll();
-            // La velocity minima è ora 0.2 così il suono non sparisce mai del tutto
-            let velocity = mapRange(Math.min(g, 255), 0, 255, 0.2, 0.6);
-            synth.triggerAttack(currentNote, "+0.1", velocity);
+            // Suona sempre con una buona intensità
+            synth.triggerAttack(currentNote, "+0.1", 0.5);
             lastNote = currentNote;
         }
     }
