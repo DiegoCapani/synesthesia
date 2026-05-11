@@ -6,19 +6,21 @@
     <title>Eco-Sinestesia | Stazione 01</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        /* Il canvas sta SOPRA il video per creare la scomposizione */
-        #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; mix-blend-mode: screen; pointer-events: none; }
-        #ui { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            text-align: center; z-index: 100; background: #000;
-            padding: 30px; border: 1px solid #fff; color: #fff;
+        body { margin: 0; background: #000; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        
+        /* Video nascosto per usare solo il canvas elaborato */
+        #video { display: none; }
+        
+        #canvas { 
+            position: absolute; width: 100%; height: 100%; object-fit: cover;
+            /* Effetto "Fuori Scala": scomposizione cromatica tramite filtri CSS leggeri */
+            filter: contrast(110%) saturate(120%);
         }
-        button { 
-            background: #fff; color: #000; border: none; padding: 20px 40px; 
-            font-size: 1.2rem; cursor: pointer; font-weight: bold;
-        }
+        
+        #ui { z-index: 10; text-align: center; background: rgba(0,0,0,0.8); padding: 30px; border: 1px solid #fff; }
+        .label { margin-bottom: 15px; font-size: 1.1em; text-transform: uppercase; letter-spacing: 4px; }
+        button { background: transparent; color: #fff; border: 1px solid #fff; padding: 12px 24px; cursor: pointer; letter-spacing: 2px; transition: 0.3s; }
+        button:hover { background: #fff; color: #000; }
     </style>
 </head>
 <body>
@@ -27,96 +29,106 @@
     <canvas id="canvas"></canvas>
 
     <div id="ui">
-        <h2 style="letter-spacing: 3px;">CITTÀ VISIBILE 2026</h2>
-        <p style="opacity: 0.7;">Analisi cromatica della fisionomia </p>
-        <button id="startBtn">ATTIVA SINESTESIA</button>
+        <div class="label">Eco-Sinestesia</div>
+        <button id="startBtn">INIZIA SCANSIONE</button>
+        <p style="font-size: 0.7em; margin-top: 15px; opacity: 0.6;">Città Visibile 2026</p>
     </div>
 
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
 
-    // 1. Configurazione Audio migliorata per udibilità immediata
-    const filter = new Tone.Filter(1500, "lowpass").toDestination();
-    const synth = new Tone.PolySynth(Tone.Synth).connect(filter);
-    synth.set({
+    // Configurazione Audio New Age stabile
+    const reverb = new Tone.Reverb({ decay: 6, wet: 0.4 }).toDestination();
+    const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
+    const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 0.1, release: 1 }
-    });
-    synth.volume.value = 0; 
+        envelope: { attack: 1.5, release: 4 }
+    }).connect(filter);
+    synth.volume.value = 2;
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5"];
 
-    async function startExperience() {
-        // Sblocco Audio per Browser Mobile
-        await Tone.start();
-        
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'user' }, 
-                audio: false 
-            });
-            video.srcObject = stream;
-            video.play();
-            
-            ui.style.display = 'none';
-            render();
-        } catch (err) {
-            alert("Errore accesso camera: " + err);
-        }
+    async function setupCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        video.srcObject = stream;
+        return new Promise((resolve) => video.onloadedmetadata = resolve);
     }
 
-    document.getElementById('startBtn').addEventListener('click', startExperience);
+    startBtn.addEventListener('click', async () => {
+        await Tone.start();
+        await setupCamera();
+        ui.style.display = 'none';
+        analyze();
+    });
 
-    let lastNote = "";
-
-    function render() {
+    function analyze() {
+        // Manteniamo la risoluzione di analisi bassa (Low-Impact) [cite: 10, 19]
+        const analysisW = 64;
+        const analysisH = 64;
+        
+        // Adattiamo il canvas alla finestra per l'output visivo
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Disegniamo sul canvas per estrarre i dati
+        // --- RENDER VISIVO (Scomposizione dell'Io) ---
+        ctx.save();
+        
+        // 1. Canale Rosso (Spostato a sinistra - Fuori Scala)
+        ctx.globalCompositeOperation = "screen";
+        ctx.filter = "matrix(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)";
+        ctx.drawImage(video, -15, 0, canvas.width, canvas.height);
+        
+        // 2. Canale Blu (Spostato a destra - Fuori Scala)
+        ctx.filter = "matrix(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0)";
+        ctx.drawImage(video, 15, 0, canvas.width, canvas.height);
+        
+        // 3. Canale Verde (Centrale - Immagine Statica/Base)
+        ctx.filter = "matrix(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)";
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Analisi di una piccola porzione centrale per i dati (Low-Impact) [cite: 19]
-        const checkSize = 50;
-        const data = ctx.getImageData(canvas.width/2 - 25, canvas.height/2 - 25, checkSize, checkSize).data;
+        ctx.restore();
+
+        // --- ANALISI DATI (Tua logica originale) ---
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = analysisW;
+        tempCanvas.height = analysisH;
+        const tCtx = tempCanvas.getContext('2d');
+        tCtx.drawImage(video, 0, 0, analysisW, analysisH);
         
+        const frame = tCtx.getImageData(16, 16, 32, 32);
         let r = 0, g = 0, b = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            r += data[i]; g += data[i+1]; b += data[i+2];
+        for (let i = 0; i < frame.data.length; i += 4) {
+            r += frame.data[i]; g += frame.data[i + 1]; b += frame.data[i + 2];
         }
-        const totalPixels = data.length / 4;
-        r /= totalPixels; g /= totalPixels; b /= totalPixels;
 
-        // EFFETTO VISIVO: "Fuori Scala" 
-        // Puliamo e ridisegnamo con sfasamento cromatico
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.globalAlpha = 0.5;
+        const count = frame.data.length / 4;
+        updateSound(r/count, g/count, b/count);
         
-        // Spostiamo i canali in base al valore del colore (Fuori Scala)
-        ctx.fillStyle = `rgb(${r}, 0, 0)`;
-        ctx.fillRect(10, 0, canvas.width, canvas.height);
-        ctx.fillStyle = `rgb(0, 0, ${b})`;
-        ctx.fillRect(-10, 0, canvas.width, canvas.height);
-
-        updateSound(r, g, b);
-        requestAnimationFrame(render);
+        requestAnimationFrame(analyze);
     }
+
+    let lastNote = "";
 
     function updateSound(r, g, b) {
         const brightness = (r + g + b) / 3;
-        const nIdx = Math.floor((brightness / 256) * notes.length);
-        const currentNote = notes[nIdx];
+        const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
+        const currentNote = notes[noteIndex];
 
-        // Cambiamo il filtro in base al Rosso
-        filter.frequency.rampTo(r * 10 + 200, 0.1);
+        filter.frequency.rampTo(mapRange(r, 0, 255, 400, 2500), 0.5);
 
-        if (currentNote !== lastNote && brightness > 30) {
-            synth.triggerAttackRelease(currentNote, "8n");
+        if (currentNote !== lastNote && brightness > 20) {
+            synth.releaseAll();
+            synth.triggerAttack(currentNote, "+0.1", mapRange(g, 0, 255, 0.2, 0.6));
             lastNote = currentNote;
         }
+    }
+
+    function mapRange(value, inMin, inMax, outMin, outMax) {
+        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
     }
 </script>
 </body>
