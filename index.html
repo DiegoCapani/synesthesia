@@ -6,7 +6,6 @@
     <title>Synesthesia</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        /* Interfaccia Minimalista: Nero e Bianco */
         body { 
             margin: 0; 
             background: #000; 
@@ -14,27 +13,26 @@
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
             overflow: hidden; 
             display: flex; 
-            flex-direction: column; 
             align-items: center; 
             justify-content: center; 
             height: 100vh; 
         }
 
-        /* Video e Canvas occupano tutto lo schermo */
-        #video { display: none; }
+        #video { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        
         #canvas { 
             position: absolute; 
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
             z-index: 1;
+            background: #000;
         }
 
-        /* UI sovrapposta inizialmente */
         #ui { 
             z-index: 10; 
             text-align: center; 
-            transition: opacity 1s ease; /* Dissolvenza fluida */
+            transition: opacity 1s ease; 
         }
 
         h1 { 
@@ -54,11 +52,14 @@
             font-size: 0.9rem; 
             letter-spacing: 2px;
             text-transform: uppercase;
-            font-family: inherit;
         }
 
-        button:active {
-            opacity: 0.7;
+        #debug-msg {
+            position: absolute;
+            bottom: 20px;
+            font-size: 10px;
+            color: #444;
+            z-index: 11;
         }
     </style>
 </head>
@@ -71,6 +72,8 @@
         <h1>Synesthesia</h1>
         <button id="startBtn">Tocca per iniziare</button>
     </div>
+    
+    <div id="debug-msg"></div>
 
 <script>
     const video = document.getElementById('video');
@@ -78,105 +81,120 @@
     const ctx = canvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
+    const debug = document.getElementById('debug-msg');
 
-    // Configurazione Audio New Age
+    // Setup Audio
     const reverb = new Tone.Reverb({ decay: 8, wet: 0.5 }).toDestination();
     const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
-    
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
         envelope: { attack: 1.5, decay: 1, sustain: 0.8, release: 4 }
     }).connect(filter);
-
-    // INCREMENTO VOLUME (Valore espresso in decibel)
-    synth.volume.value = 10; 
+    synth.volume.value = 12; // Volume molto alto
 
     const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
 
     async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'user' }, 
-            audio: false 
-        });
-        video.srcObject = stream;
-        return new Promise((resolve) => video.onloadedmetadata = resolve);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user' }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    video.play();
+                    resolve();
+                };
+            });
+        } catch (err) {
+            debug.innerText = "Errore Camera: " + err.message + ". Assicurati di usare HTTPS.";
+            throw err;
+        }
     }
 
-    let isAnalysing = false;
-
     startBtn.addEventListener('click', async () => {
-        await Tone.start();
-        await reverb.generate(); // Pre-genera il riverbero per evitare glitch
-        await setupCamera();
-        
-        // Rimuove l'interfaccia (titolo e bottone) con dissolvenza
-        ui.style.opacity = "0";
-        setTimeout(() => { ui.style.display = 'none'; }, 1000);
-        
-        // Imposta dimensioni canvas
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        isAnalysing = true;
-        analyze();
+        debug.innerText = "Inizializzazione...";
+        try {
+            await Tone.start();
+            await reverb.generate();
+            await setupCamera();
+            
+            ui.style.opacity = "0";
+            setTimeout(() => { ui.style.display = 'none'; }, 1000);
+            
+            // Fix dimensioni canvas immediato
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            draw();
+        } catch (e) {
+            console.error(e);
+        }
     });
 
-    function analyze() {
-        if (!isAnalysing) return;
-
-        // Effetto "Eco Visivo" (Persistence)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; 
+    function draw() {
+        // Effetto eco
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; 
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        ctx.globalAlpha = 0.85; 
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Disegno video
+        ctx.globalAlpha = 0.9;
+        // Calcolo per mantenere le proporzioni (cover)
+        const vRatio = video.videoWidth / video.videoHeight;
+        const cRatio = canvas.width / canvas.height;
+        let sx, sy, sw, sh;
+        if (vRatio > cRatio) {
+            sh = video.videoHeight;
+            sw = sh * cRatio;
+            sx = (video.videoWidth - sw) / 2;
+            sy = 0;
+        } else {
+            sw = video.videoWidth;
+            sh = sw / cRatio;
+            sx = 0;
+            sy = (video.videoHeight - sh) / 2;
+        }
+        
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1.0;
 
-        // Analisi cromatica su area ridotta per performance
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = 16;
-        tempCanvas.height = 16;
-        tempCtx.drawImage(video, 0, 0, 16, 16);
+        // Analisi audio rapida
+        analyzeAudio();
         
-        const frame = tempCtx.getImageData(4, 4, 8, 8);
-        let r = 0, g = 0, b = 0;
+        requestAnimationFrame(draw);
+    }
 
-        for (let i = 0; i < frame.data.length; i += 4) {
-            r += frame.data[i];
-            g += frame.data[i + 1];
-            b += frame.data[i + 2];
-        }
-
-        const count = frame.data.length / 4;
-        r /= count; g /= count; b /= count;
-
-        updateSound(r, g, b);
-        requestAnimationFrame(analyze);
+    function analyzeAudio() {
+        // Analisi pixel centrale
+        const pixel = ctx.getImageData(canvas.width/2, canvas.height/2, 1, 1).data;
+        const r = pixel[0], g = pixel[1], b = pixel[2];
+        const brightness = (r + g + b) / 3;
+        
+        updateSound(r, g, b, brightness);
     }
 
     let lastNote = "";
-
-    function updateSound(r, g, b) {
-        const brightness = (r + g + b) / 3;
-        const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
+    function updateSound(r, g, b, brightness) {
+        const noteIndex = Math.floor((brightness / 256) * notes.length);
         const currentNote = notes[noteIndex];
 
-        // Filtro influenzato dal rosso dell'incarnato
-        filter.frequency.rampTo(mapRange(r, 0, 255, 400, 2500), 0.5);
+        filter.frequency.rampTo(400 + (r * 8), 0.1);
 
-        if (currentNote !== lastNote) {
+        if (currentNote !== lastNote && currentNote !== undefined) {
             synth.releaseAll();
-            // Il volume individuale della nota dipende dalla saturazione (verde)
-            const velocity = mapRange(g, 0, 255, 0.4, 0.8);
-            synth.triggerAttack(currentNote, "+0.1", velocity);
+            const velocity = 0.4 + (g / 512);
+            synth.triggerAttack(currentNote, "+0.05", velocity);
             lastNote = currentNote;
         }
     }
 
-    function mapRange(value, inMin, inMax, outMin, outMax) {
-        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
-    }
+    // Gestione ridimensionamento finestra
+    window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
 </script>
 </body>
 </html>
