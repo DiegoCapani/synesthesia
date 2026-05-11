@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Eco-Sinestesia | Stazione 01 v17</title>
+    <title>Eco-Sinestesia | Stazione 01 v12 Clean</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
@@ -25,39 +25,48 @@
             <div style="letter-spacing: 4px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.6;">CITTÀ VISIBILE 2026</div>
             <h1 style="font-weight: 100; letter-spacing: 5px;">ECO-SINESTESIA</h1>
             <button id="startBtn">ATTIVA AUDIO E VIDEO</button>
-            <div class="version-tag">STAZIONE 01 | v17</div>
+            <div class="version-tag">STAZIONE 01 | v12 CLEAN</div>
         </div>
     </div>
 
 <script>
-    // Ottimizzazione latenza per evitare scoppiettii di buffer
-    Tone.context.latencyHint = "playback";
-
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- ENGINE AUDIO v17 (v12 Improved) ---
-    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).toDestination();
+    let audioStarted = false;
     
-    // Synth sinusoidale ma "pieno" per evitare artefatti
+    // --- ENGINE AUDIO v12 CLEAN (No scoppiettii) ---
+    const limiter = new Tone.Limiter(-2).toDestination();
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).connect(limiter);
+    
+    // Passaggio a Sine wave con attacco più dolce per eliminare i "pop"
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" }, 
-        envelope: { attack: 0.4, decay: 0.2, sustain: 1, release: 4 }
+        envelope: { attack: 0.4, decay: 0.5, sustain: 1, release: 4 }
     }).connect(reverb);
     
-    const masterGain = new Tone.Gain(0).toDestination();
+    // Volume bilanciato per evitare distorsione di buffer
+    const masterGain = new Tone.Volume(-6).connect(limiter); 
     synth.connect(masterGain);
 
-    const scale = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "B4", "C5"];
+    const scale = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "B4", "D5"];
     let prevData = null;
     let lastNote = "";
 
-    async function start() {
+    async function initAudio() {
         await Tone.start();
         Tone.context.resume();
         
+        const osc = new Tone.Oscillator().connect(masterGain).start();
+        osc.stop("+0.1");
+        
+        audioStarted = true;
+    }
+
+    async function start() {
+        await initAudio();
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
@@ -106,26 +115,28 @@
         }
         prevData = new Uint8ClampedArray(data);
 
-        // --- LOGICA REATTIVA v17 ---
-        const now = Tone.now();
-
-        if (totalMove > 3000) { 
-            // Risalita volume fluida (addio scatti)
-            masterGain.gain.setTargetAtTime(1, now, 0.1); 
+        // --- GESTIONE AUDIO v12 CLEAN ---
+        if (totalMove > 2500) { 
+            // Rampa di volume fluida invece di scatto netto
+            masterGain.volume.rampTo(-6, 0.2); 
             
             if (activeCount > 0) {
                 const centerX = activeX / activeCount;
                 const noteIdx = Math.floor((centerX / grid) * scale.length);
-                const currentNote = scale[Tone.Math.clamp(noteIdx, 0, scale.length - 1)];
+                const currentNote = scale[Math.max(0, Math.min(noteIdx, scale.length - 1))];
 
                 if (currentNote !== lastNote) {
-                    synth.triggerAttackRelease(currentNote, "1n", now, 0.4);
+                    synth.triggerAttackRelease(currentNote, "1n", undefined, 0.5);
                     lastNote = currentNote;
                 }
+                
+                ctx.strokeStyle = "white";
+                ctx.beginPath();
+                ctx.arc(canvas.width/2, canvas.height/2, 20, 0, Math.PI*2);
+                ctx.stroke();
             }
         } else {
-            // Dissolvenza morbida al silenzio
-            masterGain.gain.setTargetAtTime(0, now, 0.5);
+            masterGain.volume.rampTo(-Infinity, 1.5);
             lastNote = "";
         }
 
