@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Synesthesia | Stazione 01</title>
+    <title>Synesthesia</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { 
@@ -23,49 +23,43 @@
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            opacity: 0.2; /* Molto soffuso per focus sull'interfaccia */
+            opacity: 0.15; 
             filter: grayscale(100%);
+            z-index: 1;
         }
         #ui { 
             z-index: 10; 
             text-align: center; 
+            transition: opacity 1s ease;
         }
         h1 { 
-            font-size: 3rem; 
+            font-size: 1.8rem; 
             font-weight: 100; 
-            letter-spacing: 12px; 
-            margin-bottom: 40px; 
+            letter-spacing: 8px; 
+            margin-bottom: 30px; 
             text-transform: uppercase;
         }
         button { 
             background: #fff; 
             color: #000; 
             border: none; 
-            padding: 15px 40px; 
+            padding: 12px 30px; 
             cursor: pointer; 
-            font-size: 1rem; 
+            font-size: 0.9rem; 
             letter-spacing: 2px;
             text-transform: uppercase;
-            transition: all 0.3s ease;
         }
-        button:active { transform: scale(0.95); opacity: 0.8; }
-        #status { 
-            margin-top: 20px; 
-            font-size: 0.7rem; 
-            letter-spacing: 4px; 
-            opacity: 0.5; 
-        }
+        canvas { display: none; }
     </style>
 </head>
 <body>
 
     <video id="video" autoplay playsinline muted></video>
-    <canvas id="canvas" style="display:none;"></canvas>
+    <canvas id="canvas"></canvas>
 
     <div id="ui">
         <h1>Synesthesia</h1>
         <button id="startBtn">Tocca per iniziare</button>
-        <p id="status">SISTEMA OFFLINE</p>
     </div>
 
 <script>
@@ -73,54 +67,39 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const startBtn = document.getElementById('startBtn');
-    const statusText = document.getElementById('status');
+    const ui = document.getElementById('ui');
 
-    // CATENA AUDIO AVANZATA PER VOLUME ALTO E ZERO SCOPPIETTII
-    const limiter = new Tone.Limiter(-1).toDestination(); // Evita distorsioni
-    const compressor = new Tone.Compressor({
-        threshold: -20,
-        ratio: 4,
-        attack: 0.05,
-        release: 0.1
-    }).connect(limiter);
-
-    const reverb = new Tone.Reverb({ decay: 8, wet: 0.6 }).connect(compressor);
-    const filter = new Tone.Filter(800, "lowpass").connect(reverb);
+    // RIPRISTINO SUONO PRIMA VERSIONE + VOLUME ALTO
+    const reverb = new Tone.Reverb({ decay: 6, wet: 0.5 }).toDestination();
     
-    // PolySynth con inviluppi molto dolci
+    // PolySynth per polifonia fluida
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { 
-            attack: 1.5,   // Attacco molto lento per eliminare il "pop" iniziale
-            decay: 2, 
-            sustain: 1, 
-            release: 5     // Rilascio lunghissimo per fluidità New Age
-        }
-    }).connect(filter);
+        envelope: { attack: 1, decay: 1, sustain: 0.8, release: 3 }
+    }).connect(reverb);
 
-    // Volume generale alzato (Tone.js usa i decibel, +6 o +10 è un aumento sensibile)
-    synth.volume.value = 8; 
+    // Incremento volume
+    synth.volume.value = 10; 
 
-    const notes = ["F3", "G3", "A3", "C4", "D4", "F4", "G4", "A4"];
+    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
 
     async function setupCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'user', width: 320, height: 240 }, 
-                audio: false 
-            });
-            video.srcObject = stream;
-            return new Promise((resolve) => video.onloadedmetadata = resolve);
-        } catch (e) {
-            statusText.innerText = "ERRORE CAMERA";
-        }
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'user' }, 
+            audio: false 
+        });
+        video.srcObject = stream;
+        return new Promise((resolve) => video.onloadedmetadata = resolve);
     }
 
     startBtn.addEventListener('click', async () => {
         await Tone.start();
         await setupCamera();
-        startBtn.style.display = 'none';
-        statusText.innerText = "ANALISI CROMATICA ATTIVA";
+        
+        // Scomparsa totale dell'interfaccia
+        ui.style.opacity = "0";
+        setTimeout(() => { ui.style.display = 'none'; }, 1000);
+        
         analyze();
     });
 
@@ -135,42 +114,4 @@
         for (let i = 0; i < frame.data.length; i += 4) {
             r += frame.data[i];
             g += frame.data[i + 1];
-            b += frame.data[i + 2];
-        }
-
-        const count = frame.data.length / 4;
-        r /= count; g /= count; b /= count;
-
-        updateSound(r, g, b);
-        // Analisi ogni 100ms per evitare sovraccarico e "jitter" sonoro
-        setTimeout(analyze, 100); 
-    }
-
-    let lastNote = "";
-
-    function updateSound(r, g, b) {
-        const brightness = (r + g + b) / 3;
-        const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
-        const currentNote = notes[noteIndex];
-
-        // Filtro fluido (rampTo evita scatti udibili)
-        const filterFreq = mapRange(g, 0, 255, 300, 1500);
-        filter.frequency.rampTo(filterFreq, 0.2);
-
-        if (currentNote !== lastNote) {
-            // Rilascio graduale delle note precedenti invece di un distacco netto
-            synth.releaseAll("+0.1");
-            // Volume della nota basato sulla componente rossa (più dinamica)
-            const velocity = mapRange(r, 0, 255, 0.3, 0.8);
-            synth.triggerAttack(currentNote, "+0.2", velocity);
-            lastNote = currentNote;
-        }
-    }
-
-    function mapRange(value, inMin, inMax, outMin, outMax) {
-        let res = (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
-        return Math.max(outMin, Math.min(outMax, res)); // Clamping per sicurezza
-    }
-</script>
-</body>
-</html>
+            b += frame.
