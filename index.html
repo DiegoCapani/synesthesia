@@ -3,19 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Eco-Sinestesia | Stazione 01 v07</title>
+    <title>Eco-Sinestesia | Stazione 01 v08</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; height: 100vh; }
-        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.7; filter: brightness(1.1) contrast(1.2) saturate(0.5); }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.6; filter: brightness(1.1) contrast(1.2) saturate(0.4); }
         #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: screen; }
-        
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
         .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 50px; background: rgba(0,0,0,0.9); }
         h1 { font-weight: 100; letter-spacing: 6px; margin-bottom: 30px; text-transform: uppercase; }
         button { background: transparent; color: #fff; border: 1px solid #fff; padding: 15px 45px; cursor: pointer; letter-spacing: 3px; font-size: 1em; transition: 0.3s; }
         button:hover { background: #fff; color: #000; }
-
         .version-tag { margin-top: 25px; font-size: 0.6em; letter-spacing: 4px; opacity: 0.4; text-transform: uppercase; }
     </style>
 </head>
@@ -29,7 +27,7 @@
             <div style="letter-spacing: 4px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.5;">CITTÀ VISIBILE 2026</div>
             <h1>ECO-SINESTESIA</h1>
             <button id="startBtn">ATTIVA SCANSIONE</button>
-            <div class="version-tag">STAZIONE 01 | v07</div>
+            <div class="version-tag">STAZIONE 01 | v08</div>
         </div>
     </div>
 
@@ -39,30 +37,24 @@
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- ENGINE AUDIO v07 (Sine Waves potenziate) ---
-    const reverb = new Tone.Reverb({ decay: 15, wet: 0.6 }).toDestination();
-    // Filtro più aperto per dare più aria alla musica
-    const filter = new Tone.Filter(1200, "lowpass").connect(reverb);
+    // --- ENGINE AUDIO v08 (Anti-Pop & Zen) ---
+    const limiter = new Tone.Limiter(-1).toDestination();
+    const reverb = new Tone.Reverb({ decay: 12, wet: 0.5 }).connect(limiter);
     
     const synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
-        envelope: { attack: 1.2, decay: 0.8, sustain: 1, release: 4 }
-    }).connect(filter);
+        envelope: { attack: 2, decay: 1, sustain: 1, release: 5 }
+    }).connect(reverb);
     
-    // Volume Master alzato (da -10 a -2) per maggiore udibilità
-    const masterGain = new Tone.Volume(-2).toDestination();
+    const masterGain = new Tone.Volume(-5).connect(limiter);
     synth.connect(masterGain);
 
-    const notes = ["C3", "G3", "C4", "E4", "G4", "B4", "C5"];
+    const notes = ["C3", "G3", "C4", "E4", "G4", "B4"];
     let prevData = null;
     let lastNote = "";
 
     async function start() {
         await Tone.start();
-        // Feedback sonoro d'ingresso
-        const welcome = new Tone.Synth({oscillator:{type:"sine"}}).toDestination();
-        welcome.triggerAttackRelease("G4", "4n", undefined, 0.2);
-
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
@@ -80,8 +72,8 @@
         canvas.height = window.innerHeight;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Griglia più densa per sfere più piccole e distanziate
-        const grid = 45; 
+        // Griglia ridotta per meno sfere (v08)
+        const grid = 32; 
         const tCanvas = document.createElement('canvas');
         tCanvas.width = grid; tCanvas.height = grid;
         const tCtx = tCanvas.getContext('2d');
@@ -99,16 +91,13 @@
                 const r = data[i], g = data[i+1], b = data[i+2];
                 const bright = (r + g + b) / 3;
 
-                if (prevData) {
-                    movement += Math.abs(r - prevData[i]);
-                }
+                if (prevData) movement += Math.abs(r - prevData[i]);
 
-                // Sfere v07: più piccole e mappate con precisione
-                if (bright > 150) {
-                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.35)`;
+                // v08: Disegna sfere solo sul 50% dei punti validi (x+y % 2) per distanziarle
+                if (bright > 160 && (x + y) % 2 === 0) {
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
                     ctx.beginPath();
-                    // Il raggio è ridotto (bright/22 invece di bright/10) per distanziarle
-                    ctx.arc(x * cellW + cellW/2, y * cellH + cellH/2, bright/22, 0, Math.PI * 2);
+                    ctx.arc(x * cellW + cellW/2, y * cellH + cellH/2, bright/25, 0, Math.PI * 2);
                     ctx.fill();
                 }
                 brightness += bright;
@@ -117,23 +106,24 @@
         prevData = new Uint8ClampedArray(data);
         const avgB = brightness / (grid * grid);
 
-        // --- GESTIONE AUDIO v07 ---
-        // Soglia movimento ottimizzata
-        if (movement < 12000) { 
-            masterGain.volume.rampTo(-Infinity, 1.2);
-            if (lastNote !== "") { synth.releaseAll(); lastNote = ""; }
+        // --- GESTIONE AUDIO v08 ---
+        if (movement < 10000) { 
+            masterGain.volume.rampTo(-Infinity, 1.5);
+            if (lastNote !== "") { 
+                synth.releaseAll(Tone.now() + 0.5); // Rilascio dolce per evitare scoppiettii
+                lastNote = ""; 
+            }
         } else {
-            masterGain.volume.rampTo(-2, 0.4);
-            
+            masterGain.volume.rampTo(-5, 0.5);
             const nIdx = Math.floor((avgB / 255) * notes.length);
             const currentNote = notes[nIdx % notes.length];
 
-            if (currentNote !== lastNote && avgB > 45) {
-                synth.triggerAttackRelease(currentNote, "1n", undefined, 0.6);
+            if (currentNote !== lastNote && avgB > 50) {
+                // Suoniamo la nota con un'intensità moderata per non saturare
+                synth.triggerAttackRelease(currentNote, "2n", undefined, 0.5);
                 lastNote = currentNote;
             }
         }
-
         requestAnimationFrame(render);
     }
 
