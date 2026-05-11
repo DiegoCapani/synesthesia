@@ -18,7 +18,7 @@
             justify-content: center; 
             height: 100vh; 
         }
-        /* Video nascosto, usiamo il canvas per l'eco */
+        
         #video { display: none; }
         
         #canvas { 
@@ -26,7 +26,7 @@
             width: 100%; 
             height: 100%; 
             object-fit: cover; 
-            z-index: 1; /* Sotto l'UI all'inizio */
+            z-index: 1;
         }
 
         #ui { 
@@ -61,6 +61,9 @@
     <div id="ui">
         <h1>Synesthesia</h1>
         <button id="startBtn">Tocca per iniziare</button>
+        <p id="errorNote" style="color:red; display:none; margin-top:20px;">
+            Errore: Camera non accessibile.<br>Verifica di essere su un sito HTTPS.
+        </p>
     </div>
 
 <script>
@@ -69,37 +72,41 @@
     const ctx = canvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
     const ui = document.getElementById('ui');
+    const errorNote = document.getElementById('errorNote');
 
-    // --- CONFIGURAZIONE AUDIO NEW AGE AVANZATA ---
+    // --- SETUP AUDIO NEW AGE (Testato) ---
     
-    // Riverbero molto lungo e spaziale
-    const reverb = new Tone.Reverb({ decay: 12, wet: 0.7 }).toDestination();
-    // Filtro per ammorbidire le frequenze alte
-    const filter = new Tone.Filter(1200, "lowpass").connect(reverb);
+    // 1. Riverbero generato esplicitamente
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.6 }).toDestination();
     
-    // 1. Sintetizzatore Principale (Tappeto sonoro morbido)
+    // Ammorbidiamo i synth
+    const filter = new Tone.Filter(1500, "lowpass").connect(reverb);
+    
+    // Synth Principale
     const synthBase = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "triangle" }, // Onda più dolce della sine
-        envelope: { attack: 2, decay: 2, sustain: 0.9, release: 5 }
+        oscillator: { type: "triangle" },
+        envelope: { attack: 1.5, decay: 2, sustain: 0.8, release: 4 }
     }).connect(filter);
-    synthBase.volume.value = -6; // Abbassiamo per mixare
+    synthBase.volume.value = -8;
 
-    // 2. Sintetizzatore Cristallino (Armoniche FM tipiche New Age)
+    // Synth Cristallino (FM)
     const synthCrystal = new Tone.PolySynth(Tone.FMSynth, {
-        harmonicity: 3.01,
-        modulationIndex: 4,
+        harmonicity: 3.01, modulationIndex: 3,
         oscillator: { type: "sine" },
-        envelope: { attack: 1, decay: 0.3, sustain: 0.1, release: 4 },
-        modulation: { type: "square" },
-        modulationEnvelope: { attack: 0.5, decay: 0.2, sustain: 1, release: 2 }
+        envelope: { attack: 1, decay: 0.3, sustain: 0.1, release: 3 },
     }).connect(filter);
-    synthCrystal.volume.value = -12; // Suono di contorno cristallino
+    synthCrystal.volume.value = -16;
 
-    // Master Volume alzato
-    Tone.Destination.volume.value = 8;
+    // Master Volume
+    Tone.Destination.volume.value = 6;
 
-    // Scala Pentatonica Lidia (molto sognante/New Age)
-    const notes = ["F3", "G3", "A3", "B3", "C4", "E4", "F4", "G4", "A4", "B4", "C5", "E5"];
+    const notes = ["F3", "G3", "A3", "B3", "C4", "E4", "F4", "G4", "A4"];
+
+    // Controllo HTTPS/Secure Context
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        startBtn.style.display = 'none';
+        errorNote.style.display = 'block';
+    }
 
     async function setupCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -110,50 +117,57 @@
         return new Promise((resolve) => video.onloadedmetadata = resolve);
     }
 
+    let firstFrame = true;
+
     startBtn.addEventListener('click', async () => {
-        await Tone.start();
-        await setupCamera();
-        
-        // Scomparsa totale dell'interfaccia
-        ui.style.opacity = "0";
-        setTimeout(() => { ui.style.display = 'none'; }, 1000);
-        
-        // Impostiamo le dimensioni del canvas uguali al video per l'eco
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        analyzeAndDraw();
+        try {
+            // Avvio audio e generazione riverbero obbligatoria
+            await Tone.start();
+            await reverb.generate(); // <--- FIX AUDIO
+            
+            await setupCamera();
+            
+            // Scomparsa interfaccia
+            ui.style.opacity = "0";
+            setTimeout(() => { ui.style.display = 'none'; }, 1000);
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            analyzeAndDraw();
+        } catch (e) {
+            console.error(e);
+            errorNote.style.display = 'block';
+        }
     });
 
     function analyzeAndDraw() {
-        // --- EFFETTO ECO VISIVO (Persistenza) ---
-        // Invece di cancellare il frame, disegniamo un rettangolo nero semi-trasparente
-        // Sopra il frame precedente, creando una scia.
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; // Più basso è il valore (0.15), più lunga è l'eco
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Disegniamo il video attuale sopra con un po' di trasparenza
-        ctx.globalAlpha = 0.8; 
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        ctx.globalAlpha = 1.0; // Resettiamo
+        // --- EFFETTO ECO VISIVO (Fixato) ---
+        if (firstFrame) {
+            // Il primo frame disegna il video pieno senza eco
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            firstFrame = false;
+        } else {
+            // I frame successivi applicano la scia
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.globalAlpha = 0.85; 
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0; 
+        }
 
-        // --- ANALISI CROMATICA ---
-        // Usiamo un canvas temporaneo piccolissimo per l'analisi per performance
+        // --- ANALISI PER SUONO ---
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-        tempCanvas.width = 16;
-        tempCanvas.height = 16;
+        tempCanvas.width = 16; tempCanvas.height = 16;
         tempCtx.drawImage(video, 0, 0, 16, 16);
         
         const frame = tempCtx.getImageData(4, 4, 8, 8);
         let r = 0, g = 0, b = 0;
-
         for (let i = 0; i < frame.data.length; i += 4) {
-            r += frame.data[i];
-            g += frame.data[i + 1];
-            b += frame.data[i + 2];
+            r += frame.data[i]; g += frame.data[i + 1]; b += frame.data[i + 2];
         }
-
         const count = frame.data.length / 4;
         r /= count; g /= count; b /= count;
 
@@ -165,27 +179,15 @@
 
     function updateSound(r, g, b) {
         const brightness = (r + g + b) / 3;
-        const saturation = Math.max(r, g, b) - Math.min(r, g, b);
-        
         const noteIndex = Math.floor(mapRange(brightness, 0, 255, 0, notes.length - 1));
         const currentNote = notes[noteIndex];
 
         if (currentNote !== lastNote) {
-            // Rilascio dolce
-            synthBase.releaseAll("+0.5");
+            synthBase.releaseAll("+0.2");
             synthCrystal.releaseAll("+0.1");
-
-            // Velocity basata sulla luminosità
             const vel = mapRange(g, 0, 255, 0.3, 0.7);
-            
-            // Suoniamo entrambi i synth per profondità New Age
             synthBase.triggerAttack(currentNote, Tone.now(), vel);
-            
-            // Il synth cristallino suona solo se i colori sono saturi
-            if (saturation > 30) {
-                synthCrystal.triggerAttack(currentNote, "+0.2", vel * 0.5);
-            }
-            
+            synthCrystal.triggerAttack(currentNote, "+0.3", vel * 0.4);
             lastNote = currentNote;
         }
     }
