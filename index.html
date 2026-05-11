@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Eco-Sinestesia | Stazione 01 v13</title>
+    <title>Eco-Sinestesia | Stazione 01 v14</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; }
-        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.5; filter: brightness(1.2) contrast(1.2); }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0.5; filter: grayscale(1) brightness(1.2); }
         #canvas { position: absolute; width: 100%; height: 100%; z-index: 2; pointer-events: none; mix-blend-mode: screen; }
         #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000; z-index: 100; transition: opacity 1s; }
-        .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 50px; background: rgba(0,0,0,0.9); }
-        button { background: #fff; color: #000; border: none; padding: 20px 50px; cursor: pointer; letter-spacing: 3px; font-weight: bold; text-transform: uppercase; border-radius: 2px; }
+        .container { text-align: center; border: 1px solid rgba(255,255,255,0.2); padding: 50px; background: #000; }
+        button { background: #fff; color: #000; border: none; padding: 20px 50px; cursor: pointer; letter-spacing: 3px; font-weight: bold; text-transform: uppercase; }
         .version-tag { margin-top: 25px; font-size: 0.7em; letter-spacing: 4px; opacity: 0.5; }
     </style>
 </head>
@@ -24,45 +24,39 @@
         <div class="container">
             <div style="letter-spacing: 4px; font-size: 0.7em; margin-bottom: 10px; opacity: 0.6;">CITTÀ VISIBILE 2026</div>
             <h1 style="font-weight: 100; letter-spacing: 5px;">ECO-SINESTESIA</h1>
-            <button id="startBtn">INIZIA ESPERIENZA</button>
-            <div class="version-tag">STAZIONE 01 | v13</div>
+            <button id="startBtn">INIZIA</button>
+            <div class="version-tag">STAZIONE 01 | v14</div>
         </div>
     </div>
 
 <script>
+    // Configurazione Buffer per evitare gracchiamenti
+    Tone.context.lookAhead = 0.1; 
+
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const ui = document.getElementById('ui');
 
-    // --- ENGINE AUDIO v13 (Anti-Artifact & Silk Sound) ---
-    const limiter = new Tone.Limiter(-2).toDestination();
-    const reverb = new Tone.Reverb({ decay: 12, wet: 0.5 }).connect(limiter);
+    // --- ENGINE AUDIO v14 (Leggero & Pulito) ---
+    const reverb = new Tone.Reverb({ decay: 10, wet: 0.5 }).toDestination();
+    const delay = new Tone.FeedbackDelay("4n", 0.3).connect(reverb);
     
-    // Synth sinusoidale con inviluppo molto lungo per evitare scatti
-    const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "sine" }, 
-        envelope: { 
-            attack: 1.5,   // Attacco molto dolce
-            decay: 0.5, 
-            sustain: 1, 
-            release: 5     // Rilascio lunghissimo per code armoniose
-        }
-    }).connect(reverb);
+    // Synth singolo (meno carico CPU) con suono "morbido"
+    const synth = new Tone.Synth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 1, decay: 0.5, sustain: 0.7, release: 4 }
+    }).connect(delay);
     
-    // Volume master controllato via GainNode per precisione assoluta
-    const masterGain = new Tone.Gain(0).connect(limiter);
+    const masterGain = new Tone.Gain(0.8).toDestination();
     synth.connect(masterGain);
 
-    // Scala New Age Melodica (Do Maggiore Pentatonica con 9a)
-    const scale = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "B4", "D5"];
+    const scale = ["C3", "G3", "C4", "D4", "E4", "G4", "A4", "B4"];
     let prevData = null;
     let lastNote = "";
 
     async function start() {
         await Tone.start();
-        Tone.context.resume();
-        
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
@@ -72,7 +66,7 @@
                 setTimeout(() => ui.style.display = 'none', 1000);
                 render();
             };
-        } catch (e) { alert("Camera non trovata."); }
+        } catch (e) { alert("Camera non attiva."); }
     }
 
     function render() {
@@ -80,7 +74,7 @@
         canvas.height = window.innerHeight;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const grid = 32; 
+        const grid = 28; // Griglia più leggera
         const tCanvas = document.createElement('canvas');
         tCanvas.width = grid; tCanvas.height = grid;
         const tCtx = tCanvas.getContext('2d');
@@ -93,50 +87,38 @@
         for (let y = 0; y < grid; y++) {
             for (let x = 0; x < grid; x++) {
                 const i = (y * grid + x) * 4;
-                const r = data[i], g = data[i+1], b = data[i+2];
-                const bright = (r + g + b) / 3;
+                const r = data[i];
+                const bright = (r + data[i+1] + data[i+2]) / 3;
 
                 if (prevData) totalMove += Math.abs(r - prevData[i]);
 
-                if (bright > 160) {
+                if (bright > 165 && (x + y) % 3 === 0) { // Sfere ancora più rarefatte
+                    ctx.fillStyle = `rgba(${r}, ${data[i+1]}, ${data[i+2]}, 0.3)`;
+                    ctx.beginPath();
+                    ctx.arc((x/grid)*canvas.width, (y/grid)*canvas.height, bright/35, 0, Math.PI*2);
+                    ctx.fill();
                     activeX += x; activeCount++;
-                    // Sfere v13 (50% densità scacchiera)
-                    if ((x + y) % 2 === 0) {
-                        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.25)`;
-                        ctx.beginPath();
-                        ctx.arc((x/grid)*canvas.width, (y/grid)*canvas.height, bright/30, 0, Math.PI*2);
-                        ctx.fill();
-                    }
                 }
             }
         }
         prevData = new Uint8ClampedArray(data);
 
-        // --- GESTIONE AUDIO v13 ---
-        const now = Tone.now();
-
-        if (totalMove > 4000) { 
-            // Dissolvenza volume senza scatti
-            masterGain.gain.setTargetAtTime(1, now, 0.2); 
+        // --- GESTIONE AUDIO v14 ---
+        if (totalMove > 3000) { 
+            masterGain.gain.setTargetAtTime(1, Tone.now(), 0.1);
             
             if (activeCount > 0) {
-                const centerX = activeX / activeCount;
-                const noteIdx = Math.floor((centerX / grid) * scale.length);
-                const currentNote = scale[Math.max(0, Math.min(noteIdx, scale.length - 1))];
+                const noteIdx = Math.floor((activeX / activeCount / grid) * scale.length);
+                const currentNote = scale[Tone.Math.clamp(noteIdx, 0, scale.length - 1)];
 
                 if (currentNote !== lastNote) {
-                    // Trigger delicato: 2n = mezza nota
-                    synth.triggerAttackRelease(currentNote, "1n", now, 0.4);
+                    synth.triggerAttackRelease(currentNote, "1n", undefined, 0.5);
                     lastNote = currentNote;
                 }
             }
         } else {
-            // Silenzio progressivo se immobile
-            masterGain.gain.setTargetAtTime(0, now, 0.5);
-            if (lastNote !== "") {
-                synth.releaseAll();
-                lastNote = "";
-            }
+            masterGain.gain.setTargetAtTime(0, Tone.now(), 0.8);
+            lastNote = "";
         }
 
         requestAnimationFrame(render);
